@@ -704,13 +704,31 @@ function renderAnnList() {
     (serverMode ? '<br>点右上 ✍️ 开始标注' : '') + '</div>';
 }
 
+/* 写操作统一走这里：带编辑口令，401 时提示输入（线上部署需要，本地不需要） */
+async function apiPost(path, body, rawBlob) {
+  const doFetch = () => fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': rawBlob ? 'application/octet-stream' : 'application/json',
+      ...(localStorage.getItem('edit-token')
+        ? { 'x-edit-token': localStorage.getItem('edit-token') } : {}),
+    },
+    body: rawBlob ? body : JSON.stringify(body),
+  });
+  let r = await doFetch();
+  if (r.status === 401) {
+    const t = window.prompt('此操作需要编辑口令：');
+    if (t) {
+      localStorage.setItem('edit-token', t.trim());
+      r = await doFetch();
+    }
+  }
+  return r;
+}
+
 async function saveAnnotations() {
   try {
-    const r = await fetch('/api/annotations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(annotations),
-    });
+    const r = await apiPost('/api/annotations', annotations);
     if (!r.ok) throw 0;
   } catch { toast('批注保存失败'); }
 }
@@ -952,11 +970,7 @@ function renderAiVersions() {
       e.stopPropagation();
       if (!confirm('删除该版本？图片文件会一并删除，不可恢复。')) return;
       try {
-        const r = await fetch('/api/edits/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folder: current.folder, op: delOp }),
-        });
+        const r = await apiPost('/api/edits/delete', { folder: current.folder, op: delOp });
         if (!r.ok) throw 0;
         await refreshEditsAndFaces();
         toast('已删除');
@@ -977,18 +991,15 @@ function renderAiVersions() {
 
 async function toggleOp(op, on, skipRefresh) {
   try {
-    const r = await fetch('/api/edits/active', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: current.folder, op, on }),
-    });
+    const r = await apiPost('/api/edits/active', { folder: current.folder, op, on });
     if (!r.ok) throw 0;
     if (!skipRefresh) await refreshEditsAndFaces();
   } catch { toast('切换版本失败'); }
 }
 
 async function refreshEditsAndFaces() {
-  edits = await (await fetch('assets/edits.json?t=' + Date.now())).json();
+  const src = serverMode ? '/api/edits' : 'assets/edits.json';
+  edits = await (await fetch(src + '?t=' + Date.now())).json();
   for (const fd of FACE_DEFS) await reloadFace(current.folder, fd.face);
   renderAiVersions();
   captureView();
@@ -1077,38 +1088,40 @@ document.getElementById('ai-generate').addEventListener('click', async () => {
   const timer = setInterval(() =>
     status.textContent = '生成中 ' + Math.round((Date.now() - t0) / 1000) + 's…', 1000);
   try {
-    const r = await fetch('/api/edit-view', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        folder: current.folder, prompt,
-        model: document.getElementById('ai-model').value || undefined,
-        ref: aiRef || undefined,
-        image: cap.image,
-      }),
+    const model = document.getElementById('ai-model').value || undefined;
+    const r = await apiPost('/api/edit-view', {
+      folder: current.folder, prompt, model,
+      ref: aiRef || undefined,
+      image: cap.image,
     });
-    const res = await r.json();
-    if (!r.ok || res.error) throw new Error(res.error || 'HTTP ' + r.status);
+    if (!r.ok) {
+      let msg = 'HTTP ' + r.status;
+      try { msg = (await r.json()).error || msg; } catch {}
+      throw new Error(msg);
+    }
     clearInterval(timer);
 
     status.textContent = '融合贴图中…';
     await new Promise(rs => setTimeout(rs, 30));  // 让状态先渲染出来
-    const editedImg = await loadImageEl(res.image);
+    const blobUrl = URL.createObjectURL(await r.blob());
+    const editedImg = await loadImageEl(blobUrl);
     const faceCanvases = await reprojectToFaces(cap, editedImg);
+    URL.revokeObjectURL(blobUrl);
     if (!Object.keys(faceCanvases).length) throw new Error('编辑区域没有覆盖任何面');
 
     status.textContent = '保存中…';
-    const facesData = {};
-    for (const [face, canvas] of Object.entries(faceCanvases))
-      facesData[face] = canvas.toDataURL('image/jpeg', 0.92);
-    const r2 = await fetch('/api/edit-apply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        folder: current.folder, prompt,
-        model: document.getElementById('ai-model').value || '',
-        faces: facesData,
-      }),
+    const op = String(Math.floor(Date.now() / 1000));
+    const folder = current.folder;
+    for (const [face, canvas] of Object.entries(faceCanvases)) {
+      const blob = await new Promise(rs => canvas.toBlob(rs, 'image/jpeg', 0.92));
+      const ru = await apiPost('/api/edit-image?folder=' + encodeURIComponent(folder) +
+        '&face=' + face + '&op=' + op, blob, true);
+      if (!ru.ok) throw new Error('贴图上传失败 HTTP ' + ru.status);
+    }
+    const r2 = await apiPost('/api/edit-apply', {
+      folder, prompt, op,
+      model: document.getElementById('ai-model').value || '',
+      faces: Object.keys(faceCanvases),
     });
     const res2 = await r2.json();
     if (!r2.ok || res2.error) throw new Error(res2.error || 'HTTP ' + r2.status);
@@ -1213,11 +1226,13 @@ async function init() {
   if (serverMode) document.getElementById('btn-ann-add').style.display = 'flex';
   if (aiMode) document.getElementById('btn-ai').style.display = 'flex';
 
+  const annSrc = serverMode ? '/api/annotations' : 'assets/annotations.json';
+  const editsSrc = serverMode ? '/api/edits' : 'assets/edits.json';
   try {
-    annotations = await (await fetch('assets/annotations.json?t=' + Date.now())).json();
+    annotations = await (await fetch(annSrc + '?t=' + Date.now())).json();
   } catch { annotations = {}; }
   try {
-    edits = await (await fetch('assets/edits.json?t=' + Date.now())).json();
+    edits = await (await fetch(editsSrc + '?t=' + Date.now())).json();
   } catch { edits = {}; }
 
   try {

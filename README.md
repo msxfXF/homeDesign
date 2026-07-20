@@ -2,7 +2,10 @@
 
 自家装修方案「天峰903」的 VR 全景查看器，共 13 个场景（客餐厅、玄关、厨房、卧室、卫生间、衣帽间、阳台等）。
 
-**在线访问：** https://msxfxf.github.io/homeDesign/
+**在线访问（全功能）：** https://homedesign.msxfxf.workers.dev —— Cloudflare Worker 部署，浏览公开，编辑（AI 改图/批注/删版本）需口令；数据存 KV
+**在线访问（只读镜像）：** https://msxfxf.github.io/homeDesign/ —— GitHub Pages，仅浏览
+
+Cloudflare 部署：`npx wrangler deploy`（配置在 `wrangler.jsonc`，API 逻辑在 `worker.js`；密钥用 `wrangler secret put DASHSCOPE_API_KEY / ARK_API_KEY / EDIT_TOKEN` 管理）
 
 ## 操作
 

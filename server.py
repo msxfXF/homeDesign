@@ -130,19 +130,12 @@ def call_ark(prompt, model, image_data_url, ref_data_url=None):
     return res["data"][0]["url"]
 
 
-def download_as_data_url(url):
-    """下载结果图，返回 data URL（交给前端做重投影）。"""
+def download_bytes(url):
+    """下载结果图，返回 (bytes, content_type)。"""
     with urllib.request.urlopen(url, timeout=120) as r:
         data = r.read()
     mime = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
-    return "data:%s;base64,%s" % (mime, base64.b64encode(data).decode())
-
-
-def save_data_url(data_url, out_path):
-    """把前端传来的 data URL 图片落盘。"""
-    b64 = data_url.split(",", 1)[1]
-    with open(out_path, "wb") as f:
-        f.write(base64.b64decode(b64))
+    return data, mime
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -161,8 +154,13 @@ class Handler(SimpleHTTPRequestHandler):
         return json.loads(self.rfile.read(length)) if length else {}
 
     def do_GET(self):
-        if self.path.split("?")[0] == "/api/health":
+        path = self.path.split("?")[0]
+        if path == "/api/health":
             return self.send_json({"ok": True, "ai": bool(MODELS), "models": MODELS})
+        if path == "/api/annotations":
+            return self.send_json(read_json(ANN_PATH, {}))
+        if path == "/api/edits":
+            return self.send_json(read_json(EDITS_PATH, {}))
         return super().do_GET()
 
     def do_POST(self):
@@ -183,6 +181,9 @@ class Handler(SimpleHTTPRequestHandler):
 
             if path == "/api/edit-view":
                 return self.handle_edit_view()
+
+            if path == "/api/edit-image":
+                return self.handle_edit_image()
 
             if path == "/api/edit-apply":
                 return self.handle_edit_apply()
@@ -265,33 +266,56 @@ class Handler(SimpleHTTPRequestHandler):
             url = call_ark(full_prompt, model, image, ref)
         else:
             url = call_wan(full_prompt, None, model, ref, image_data_url=image)
-        return self.send_json({"ok": True, "image": download_as_data_url(url)})
+        data, mime = download_bytes(url)
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def handle_edit_image(self):
+        """保存前端上传的单面贴图（原始 jpeg 字节流）。
+
+        query: folder, face, op
+        """
+        from urllib.parse import urlparse, parse_qs
+        q = parse_qs(urlparse(self.path).query)
+        folder = (q.get("folder") or [""])[0]
+        face = (q.get("face") or [""])[0]
+        op = (q.get("op") or [""])[0]
+        if not re.fullmatch(r"[\w\-一-鿿]+", folder) or face not in FACES \
+                or not re.fullmatch(r"\d+", op):
+            return self.send_json({"error": "参数不合法"}, 400)
+        length = int(self.headers.get("Content-Length", 0))
+        if not 0 < length < 20 * 1024 * 1024:
+            return self.send_json({"error": "图片大小不合法"}, 400)
+        out_dir = os.path.join(ROOT, "assets", "edits", folder)
+        os.makedirs(out_dir, exist_ok=True)
+        fname = "%s_%s.jpg" % (face, op)
+        with open(os.path.join(out_dir, fname), "wb") as f:
+            f.write(self.rfile.read(length))
+        return self.send_json({"ok": True, "file": "assets/edits/%s/%s" % (folder, fname)})
 
     def handle_edit_apply(self):
-        """保存前端重投影后的各面贴图，注册为一组编辑版本。
+        """注册一组编辑版本（图片已通过 /api/edit-image 上传）。
 
-        body: {folder, prompt, model, faces: {face: dataURL}}
+        body: {folder, prompt, model, op, faces: [face...]}
         """
         body = self.read_body()
         folder = body.get("folder", "")
         prompt = (body.get("prompt") or "").strip()
         model = body.get("model") or ""
-        faces = body.get("faces") or {}
-        if not re.fullmatch(r"[\w\-一-鿿]+", folder) or not faces:
+        op = str(body.get("op") or "")
+        faces = body.get("faces") or []
+        if not re.fullmatch(r"[\w\-一-鿿]+", folder) or not re.fullmatch(r"\d+", op) \
+                or not faces or not all(f in FACES for f in faces):
             return self.send_json({"error": "参数不合法"}, 400)
-        if not all(f in FACES and isinstance(d, str) and d.startswith("data:image/")
-                   for f, d in faces.items()):
-            return self.send_json({"error": "面数据不合法"}, 400)
 
         edits = read_json(EDITS_PATH, {})
-        op = str(int(time.time()))
-        out_dir = os.path.join(ROOT, "assets", "edits", folder)
-        os.makedirs(out_dir, exist_ok=True)
         now = time.strftime("%Y-%m-%d %H:%M")
-        for face, data_url in faces.items():
-            fname = "%s_%s.jpg" % (face, op)
-            save_data_url(data_url, os.path.join(out_dir, fname))
-            rel = "assets/edits/%s/%s" % (folder, fname)
+        for face in faces:
+            rel = "assets/edits/%s/%s_%s.jpg" % (folder, face, op)
             entry = edits.setdefault(folder, {}).setdefault(
                 face, {"active": None, "versions": []})
             entry["versions"].append({
@@ -300,7 +324,7 @@ class Handler(SimpleHTTPRequestHandler):
             })
             entry["active"] = rel
         write_json(EDITS_PATH, edits)
-        return self.send_json({"ok": True, "op": op, "faces": list(faces)})
+        return self.send_json({"ok": True, "op": op, "faces": faces})
 
     def log_message(self, fmt, *args):
         if "/api/" in (args[0] if args else ""):

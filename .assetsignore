@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+.DS_Store
+server.py
+worker.js
+wrangler.jsonc
+.assetsignore
+README.md

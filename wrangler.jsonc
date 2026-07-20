@@ -1,0 +1,19 @@
+{
+  "name": "homedesign",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/assets/edits/*"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "PANO_KV",
+      "id": "4b378faa7d0844f685e2ba73ec37f803"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
