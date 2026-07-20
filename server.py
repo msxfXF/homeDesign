@@ -158,7 +158,9 @@ class Handler(SimpleHTTPRequestHandler):
         edits = read_json(EDITS_PATH, {})
         affected = []
         for face, entry in edits.get(folder, {}).items():
-            ver = next((v for v in entry["versions"] if v.get("op") == op), None)
+            # 旧版单面记录没有 op 字段，用文件路径当组键
+            ver = next((v for v in entry["versions"]
+                        if (v.get("op") or v["file"]) == op), None)
             if not ver:
                 continue
             entry["active"] = ver["file"] if on else None

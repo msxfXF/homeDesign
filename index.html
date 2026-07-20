@@ -918,14 +918,14 @@ function sceneOps() {
   const byOp = new Map();
   Object.values(edits[current.folder] || {}).forEach(entry => {
     entry.versions.forEach(v => {
-      if (!v.op) return;
-      if (!byOp.has(v.op)) byOp.set(v.op, { ...v, files: [], activeCount: 0 });
-      const op = byOp.get(v.op);
+      const key = v.op || v.file;  // 旧版单面记录没有 op，用文件路径当组键
+      if (!byOp.has(key)) byOp.set(key, { ...v, op: key, files: [], activeCount: 0 });
+      const op = byOp.get(key);
       op.files.push(v.file);
       if (entry.active === v.file) op.activeCount++;
     });
   });
-  return [...byOp.values()].sort((a, b) => a.op.localeCompare(b.op));
+  return [...byOp.values()].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 }
 
 function renderAiVersions() {
