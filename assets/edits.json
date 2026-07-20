@@ -1,1 +1,39 @@
-{}
+{
+  "09_主卧卫生间": {
+    "f": {
+      "active": "assets/edits/09_主卧卫生间/f_1784516826.jpg",
+      "versions": [
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784516433.jpg",
+          "prompt": "洗手池我想要这样的",
+          "model": "wan2.7-image-pro",
+          "time": "2026-07-20 11:00"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784516488.jpg",
+          "prompt": "洗手池我想要这样的，其他的不变",
+          "model": "wan2.7-image-pro",
+          "time": "2026-07-20 11:01"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784516540.jpg",
+          "prompt": "洗手池我想要这样的，其他的保持不变",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:02"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784516769.jpg",
+          "prompt": "洗手池我喜欢一个的，不要设计成两个分开，另外，我想要收纳空间",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:06"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784516826.jpg",
+          "prompt": "洗手池我喜欢一个的，并且要收纳空间放洗漱用品",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:07"
+        }
+      ]
+    }
+  }
+}

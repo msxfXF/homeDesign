@@ -10,8 +10,6 @@ import base64
 import json
 import os
 import re
-import subprocess
-import tempfile
 import time
 import urllib.request
 from functools import partial
@@ -60,14 +58,15 @@ def write_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def call_wan(prompt, image_path, model, ref_data_url=None):
+def call_wan(prompt, image_path, model, ref_data_url=None, image_data_url=None):
     """调用图像编辑模型，返回结果图片 URL。
 
     有参考图时：图1 = 当前画面，图2 = 参考图，提示词可用"图1/图2"引用。
     """
-    with open(image_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
-    content = [{"image": "data:image/jpeg;base64," + b64}]
+    if image_data_url is None:
+        with open(image_path, "rb") as f:
+            image_data_url = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+    content = [{"image": image_data_url}]
     if ref_data_url:
         content.append({"image": ref_data_url})
     content.append({"text": prompt})
@@ -90,19 +89,19 @@ def call_wan(prompt, image_path, model, ref_data_url=None):
     raise RuntimeError("响应中没有图片: " + json.dumps(res)[:300])
 
 
-def download_and_fit(url, out_path):
-    """下载结果图并转成 1500x1500 jpg（与原始面贴图一致）。"""
-    tmp = tempfile.mktemp(suffix=".img")
-    try:
-        urllib.request.urlretrieve(url, tmp)
-        r = subprocess.run(
-            ["sips", "-s", "format", "jpeg", "-z", "1500", "1500", tmp, "--out", out_path],
-            capture_output=True)
-        if r.returncode != 0 or not os.path.exists(out_path):
-            os.replace(tmp, out_path)  # sips 失败就用原图
-    finally:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+def download_as_data_url(url):
+    """下载结果图，返回 data URL（交给前端做重投影）。"""
+    with urllib.request.urlopen(url, timeout=120) as r:
+        data = r.read()
+    mime = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    return "data:%s;base64,%s" % (mime, base64.b64encode(data).decode())
+
+
+def save_data_url(data_url, out_path):
+    """把前端传来的 data URL 图片落盘。"""
+    b64 = data_url.split(",", 1)[1]
+    with open(out_path, "wb") as f:
+        f.write(base64.b64decode(b64))
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -136,64 +135,92 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"ok": True})
 
             if path == "/api/edits/active":
-                body = self.read_body()
-                folder, face = body.get("folder", ""), body.get("face", "")
-                edits = read_json(EDITS_PATH, {})
-                entry = edits.get(folder, {}).get(face)
-                if not entry:
-                    return self.send_json({"error": "没有该面的编辑记录"}, 404)
-                entry["active"] = body.get("file")  # None = 恢复原图
-                write_json(EDITS_PATH, edits)
-                return self.send_json({"ok": True})
+                return self.handle_active()
 
-            if path == "/api/edit":
-                return self.handle_edit()
+            if path == "/api/edit-view":
+                return self.handle_edit_view()
+
+            if path == "/api/edit-apply":
+                return self.handle_edit_apply()
 
             return self.send_json({"error": "unknown api"}, 404)
         except Exception as e:
             return self.send_json({"error": str(e)}, 500)
 
-    def handle_edit(self):
+    def handle_active(self):
+        """切换生效版本。op 模式整组切换（一次视野编辑覆盖的所有面）。
+
+        body: {folder, op, on: true/false}
+        """
+        body = self.read_body()
+        folder, op = body.get("folder", ""), body.get("op", "")
+        on = bool(body.get("on"))
+        edits = read_json(EDITS_PATH, {})
+        affected = []
+        for face, entry in edits.get(folder, {}).items():
+            ver = next((v for v in entry["versions"] if v.get("op") == op), None)
+            if not ver:
+                continue
+            entry["active"] = ver["file"] if on else None
+            affected.append(face)
+        if not affected:
+            return self.send_json({"error": "没有该编辑记录"}, 404)
+        write_json(EDITS_PATH, edits)
+        return self.send_json({"ok": True, "faces": affected})
+
+    def handle_edit_view(self):
+        """AI 编辑当前视野截图，返回结果图（不落盘，前端做重投影）。"""
         if not API_KEY:
             return self.send_json({"error": "未配置 DASHSCOPE_API_KEY"}, 400)
         body = self.read_body()
-        folder = body.get("folder", "")
-        face = body.get("face", "")
         prompt = (body.get("prompt") or "").strip()
         model = body.get("model") or MODELS[0]
+        image = body.get("image") or ""
         ref = body.get("ref")
-        if face not in FACES or not prompt or not re.fullmatch(r"[\w\-一-鿿]+", folder):
+        if not prompt or not image.startswith("data:image/"):
             return self.send_json({"error": "参数不合法"}, 400)
         if model not in MODELS:
             return self.send_json({"error": "不支持的模型: " + str(model)}, 400)
         if ref and not (isinstance(ref, str) and ref.startswith("data:image/")):
             return self.send_json({"error": "参考图格式不合法"}, 400)
-        src = os.path.join(ROOT, "assets", "scenes", folder, face + ".jpg")
-        if not os.path.exists(src):
-            return self.send_json({"error": "场景图不存在"}, 404)
 
-        # 如果该面已有生效的编辑版本，以它为参考图，支持叠加编辑
+        url = call_wan(prompt, None, model, ref, image_data_url=image)
+        return self.send_json({"ok": True, "image": download_as_data_url(url)})
+
+    def handle_edit_apply(self):
+        """保存前端重投影后的各面贴图，注册为一组编辑版本。
+
+        body: {folder, prompt, model, faces: {face: dataURL}}
+        """
+        body = self.read_body()
+        folder = body.get("folder", "")
+        prompt = (body.get("prompt") or "").strip()
+        model = body.get("model") or ""
+        faces = body.get("faces") or {}
+        if not re.fullmatch(r"[\w\-一-鿿]+", folder) or not faces:
+            return self.send_json({"error": "参数不合法"}, 400)
+        if not all(f in FACES and isinstance(d, str) and d.startswith("data:image/")
+                   for f, d in faces.items()):
+            return self.send_json({"error": "面数据不合法"}, 400)
+
         edits = read_json(EDITS_PATH, {})
-        active = edits.get(folder, {}).get(face, {}).get("active")
-        if active and os.path.exists(os.path.join(ROOT, active)):
-            src = os.path.join(ROOT, active)
-
-        url = call_wan(prompt, src, model, ref)
-
+        op = str(int(time.time()))
         out_dir = os.path.join(ROOT, "assets", "edits", folder)
         os.makedirs(out_dir, exist_ok=True)
-        fname = "%s_%d.jpg" % (face, int(time.time()))
-        download_and_fit(url, os.path.join(out_dir, fname))
-
-        rel = "assets/edits/%s/%s" % (folder, fname)
-        entry = edits.setdefault(folder, {}).setdefault(face, {"active": None, "versions": []})
-        entry["versions"].append({
-            "file": rel, "prompt": prompt, "model": model,
-            "time": time.strftime("%Y-%m-%d %H:%M"),
-        })
-        entry["active"] = rel
+        now = time.strftime("%Y-%m-%d %H:%M")
+        for face, data_url in faces.items():
+            fname = "%s_%s.jpg" % (face, op)
+            save_data_url(data_url, os.path.join(out_dir, fname))
+            rel = "assets/edits/%s/%s" % (folder, fname)
+            entry = edits.setdefault(folder, {}).setdefault(
+                face, {"active": None, "versions": []})
+            entry["versions"].append({
+                "file": rel, "prompt": prompt, "model": model,
+                "time": now, "op": op,
+            })
+            entry["active"] = rel
         write_json(EDITS_PATH, edits)
-        return self.send_json({"ok": True, "file": rel})
+        return self.send_json({"ok": True, "op": op, "faces": list(faces)})
 
     def log_message(self, fmt, *args):
         if "/api/" in (args[0] if args else ""):

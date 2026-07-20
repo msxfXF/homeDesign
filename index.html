@@ -120,7 +120,8 @@
   .ann-empty { color: #777; text-align: center; padding: 30px 0; }
 
   /* AI 改图面板 */
-  #ai-face-preview { width: 100%; border-radius: 10px; display: block; margin: 8px 0; }
+  #ai-cap-preview { width: 100%; border-radius: 10px; display: block; margin: 8px 0;
+    outline: 1px solid rgba(255,255,255,.15); }
   #ai-panel .face-row { display: flex; align-items: center; justify-content: space-between;
     margin-top: 4px; }
   #ai-panel .face-row b { font-size: 14px; }
@@ -194,10 +195,14 @@
   <header>AI 改图<button class="close" data-close="ai-panel">✕</button></header>
   <div class="body">
     <div class="face-row">
-      <span>编辑的面：<b id="ai-face-name"></b></span>
-      <button class="small" id="ai-face-refresh">用当前朝向</button>
+      <span style="font-size:12px;color:#aaa">编辑范围 = 当前视野向外扩大一圈</span>
+      <button class="small" id="ai-cap-refresh">重新捕捉</button>
     </div>
-    <img id="ai-face-preview" alt="">
+    <img id="ai-cap-preview" alt="">
+    <div class="face-row">
+      <span style="font-size:12px;color:#aaa">捕捉视野 <b id="ai-fov-val">105</b>°</span>
+      <input type="range" id="ai-fov" min="90" max="120" value="105" step="5" style="width:55%">
+    </div>
     <select id="ai-model"></select>
     <div class="face-row" style="margin-top:8px">
       <span style="font-size:12px;color:#aaa">参考图（可选，可直接 Ctrl+V 粘贴）</span>
@@ -252,7 +257,7 @@ const fadeEl = document.getElementById('fade');
 const loadingEl = document.getElementById('loading');
 const hotspotLayer = document.getElementById('hotspot-layer');
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 wrap.appendChild(renderer.domElement);
@@ -756,61 +761,216 @@ document.getElementById('ann-save').addEventListener('click', async () => {
   toast('批注已保存');
 });
 
-/* ---------- AI 改图 ---------- */
-const FACE_NAMES = { f: '前方', b: '后方', l: '左侧', r: '右侧', u: '天花板', d: '地面' };
-let aiFace = 'f';
+/* ---------- AI 改图（视野捕捉 + 重投影回立方体面） ---------- */
 let aiBusy = false;
+let pendingCap = null;   // {image, basis:{x,y,f}, tanHalf}
 
-function currentFace() {
-  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  const ax = Math.abs(dir.x), ay = Math.abs(dir.y), az = Math.abs(dir.z);
-  if (ax >= ay && ax >= az) return dir.x > 0 ? 'r' : 'l';
-  if (ay >= ax && ay >= az) return dir.y > 0 ? 'u' : 'd';
-  return dir.z < 0 ? 'f' : 'b';
+// 捕捉比当前视野更大一圈的画面送给 AI。
+// 用 WebGLRenderTarget 离屏渲染（同一 GL 上下文，不动主 canvas），读回像素拼成图片。
+const CAP_SIZE = 1536;
+const capCam = new THREE.PerspectiveCamera(105, 1, 0.1, 100);
+const capTarget = new THREE.WebGLRenderTarget(CAP_SIZE, CAP_SIZE, {
+  colorSpace: THREE.SRGBColorSpace,
+  samples: 4,
+});
+
+function captureView() {
+  const fovDeg = parseInt(document.getElementById('ai-fov').value, 10);
+  capCam.fov = fovDeg;
+  capCam.updateProjectionMatrix();
+  capCam.quaternion.copy(camera.quaternion);
+
+  renderer.setRenderTarget(capTarget);
+  renderer.render(scene, capCam);
+  const buf = new Uint8Array(CAP_SIZE * CAP_SIZE * 4);
+  renderer.readRenderTargetPixels(capTarget, 0, 0, CAP_SIZE, CAP_SIZE, buf);
+  renderer.setRenderTarget(null);
+
+  // GL 读回是自下而上的，翻转行序
+  const c = document.createElement('canvas');
+  c.width = c.height = CAP_SIZE;
+  const ctx = c.getContext('2d');
+  const id = ctx.createImageData(CAP_SIZE, CAP_SIZE);
+  const row = CAP_SIZE * 4;
+  for (let y = 0; y < CAP_SIZE; y++)
+    id.data.set(buf.subarray((CAP_SIZE - 1 - y) * row, (CAP_SIZE - y) * row), y * row);
+  ctx.putImageData(id, 0, 0);
+  const image = c.toDataURL('image/jpeg', 0.92);
+
+  const q = capCam.quaternion;
+  const v = axis => axis.applyQuaternion(q);
+  const bx = v(new THREE.Vector3(1, 0, 0));
+  const by = v(new THREE.Vector3(0, 1, 0));
+  const bf = v(new THREE.Vector3(0, 0, -1));
+  pendingCap = {
+    image,
+    basis: { x: [bx.x, bx.y, bx.z], y: [by.x, by.y, by.z], f: [bf.x, bf.y, bf.z] },
+    tanHalf: Math.tan(fovDeg * Math.PI / 360),
+  };
+  document.getElementById('ai-cap-preview').src = pendingCap.image;
+}
+
+// 立方体面上像素 (u,v∈[-1,1]，v 上为正) 对应的世界方向，与 FACE_DEFS 的平面布置一致
+function faceDirComp(face, u, v, out) {
+  switch (face) {
+    case 'f': out[0] = u; out[1] = v; out[2] = -1; break;
+    case 'b': out[0] = -u; out[1] = v; out[2] = 1; break;
+    case 'l': out[0] = -1; out[1] = v; out[2] = -u; break;
+    case 'r': out[0] = 1; out[1] = v; out[2] = u; break;
+    case 'u': out[0] = u; out[1] = 1; out[2] = v; break;
+    case 'd': out[0] = u; out[1] = -1; out[2] = -v; break;
+  }
+}
+
+function loadImageEl(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+// 把编辑结果按捕捉时的相机参数投影回被覆盖的面，边缘羽化融合
+async function reprojectToFaces(cap, editedImg) {
+  const W = editedImg.naturalWidth, H = editedImg.naturalHeight;
+  const ec = document.createElement('canvas');
+  ec.width = W; ec.height = H;
+  const ectx = ec.getContext('2d');
+  ectx.drawImage(editedImg, 0, 0);
+  const ed = ectx.getImageData(0, 0, W, H).data;
+
+  const bx = cap.basis.x, by = cap.basis.y, bf = cap.basis.f;
+  const th = cap.tanHalf, FEATHER = 0.15, N = 1500;
+  const d = [0, 0, 0];
+  const result = {};
+
+  for (const fd of FACE_DEFS) {
+    const face = fd.face;
+    // 粗测：9x9 网格有没有任何方向落进捕捉视锥
+    let hit = false;
+    for (let gy = 0; gy <= 8 && !hit; gy++) {
+      for (let gx = 0; gx <= 8; gx++) {
+        faceDirComp(face, gx / 4 - 1, 1 - gy / 4, d);
+        const dz = d[0] * bf[0] + d[1] * bf[1] + d[2] * bf[2];
+        if (dz <= 0) continue;
+        const nx = (d[0] * bx[0] + d[1] * bx[1] + d[2] * bx[2]) / dz / th;
+        const ny = (d[0] * by[0] + d[1] * by[1] + d[2] * by[2]) / dz / th;
+        if (Math.abs(nx) < 1 && Math.abs(ny) < 1) { hit = true; break; }
+      }
+    }
+    if (!hit) continue;
+
+    const baseImg = await loadImageEl(faceUrl(current.folder, face));
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(baseImg, 0, 0, N, N);
+    const id = ctx.getImageData(0, 0, N, N);
+    const px = id.data;
+    let touched = false;
+
+    for (let j = 0; j < N; j++) {
+      const v = 1 - (j + 0.5) / (N / 2);
+      for (let i = 0; i < N; i++) {
+        const u = (i + 0.5) / (N / 2) - 1;
+        faceDirComp(face, u, v, d);
+        const dz = d[0] * bf[0] + d[1] * bf[1] + d[2] * bf[2];
+        if (dz <= 0) continue;
+        const nx = (d[0] * bx[0] + d[1] * bx[1] + d[2] * bx[2]) / dz / th;
+        const ny = (d[0] * by[0] + d[1] * by[1] + d[2] * by[2]) / dz / th;
+        const t = Math.max(Math.abs(nx), Math.abs(ny));
+        if (t >= 1) continue;
+        let a = (1 - t) / FEATHER;
+        if (a > 1) a = 1;
+        a = a * a * (3 - 2 * a);  // smoothstep
+
+        // 双线性采样编辑结果
+        const sx = Math.min(Math.max((nx * 0.5 + 0.5) * W - 0.5, 0), W - 1.001);
+        const sy = Math.min(Math.max((0.5 - ny * 0.5) * H - 0.5, 0), H - 1.001);
+        const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0;
+        const o00 = (y0 * W + x0) * 4, o10 = o00 + 4, o01 = o00 + W * 4, o11 = o01 + 4;
+        const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+        const o = (j * N + i) * 4;
+        for (let k = 0; k < 3; k++) {
+          const s = ed[o00 + k] * w00 + ed[o10 + k] * w10 + ed[o01 + k] * w01 + ed[o11 + k] * w11;
+          px[o + k] = px[o + k] * (1 - a) + s * a;
+        }
+        touched = true;
+      }
+    }
+    if (touched) {
+      ctx.putImageData(id, 0, 0);
+      result[face] = c;
+    }
+  }
+  return result;
 }
 
 function refreshAiPanel() {
   if (!current) return;
-  aiFace = currentFace();
-  document.getElementById('ai-face-name').textContent =
-    current.name + ' · ' + FACE_NAMES[aiFace];
-  document.getElementById('ai-face-preview').src = faceUrl(current.folder, aiFace);
+  captureView();
   renderAiVersions();
+}
+
+// 一次视野编辑生成一组（op）面贴图，版本按组切换
+function sceneOps() {
+  const byOp = new Map();
+  Object.values(edits[current.folder] || {}).forEach(entry => {
+    entry.versions.forEach(v => {
+      if (!v.op) return;
+      if (!byOp.has(v.op)) byOp.set(v.op, { ...v, files: [], activeCount: 0 });
+      const op = byOp.get(v.op);
+      op.files.push(v.file);
+      if (entry.active === v.file) op.activeCount++;
+    });
+  });
+  return [...byOp.values()].sort((a, b) => a.op.localeCompare(b.op));
 }
 
 function renderAiVersions() {
   const box = document.getElementById('ai-versions');
   box.innerHTML = '';
-  const entry = edits[current.folder]?.[aiFace];
-  if (!entry?.versions?.length) return;
+  const ops = sceneOps();
+  if (!ops.length) return;
+  const anyActive = ops.some(o => o.activeCount > 0);
 
-  const mk = (label, file, promptText, timeText) => {
+  const mk = (label, timeText, isActive, onClick) => {
     const el = document.createElement('div');
-    el.className = 'ver' + ((entry.active || null) === file ? ' active' : '');
+    el.className = 'ver' + (isActive ? ' active' : '');
     el.innerHTML = '<span class="p"></span><span class="t"></span>';
-    el.querySelector('.p').textContent = label || promptText;
+    el.querySelector('.p').textContent = label;
     el.querySelector('.t').textContent = timeText || '';
-    el.addEventListener('click', () => setActiveVersion(file));
+    el.addEventListener('click', onClick);
     box.appendChild(el);
   };
-  mk('📷 原图', null);
-  entry.versions.forEach(v => mk(null, v.file, v.prompt,
-    (v.time || '') + (v.model ? ' · ' + v.model.replace('-image', '') : '')));
+  mk('📷 全部恢复原图', '', !anyActive, async () => {
+    for (const o of ops) if (o.activeCount) await toggleOp(o.op, false, true);
+    await refreshEditsAndFaces();
+  });
+  ops.forEach(o => mk(o.prompt,
+    (o.time || '') + (o.model ? ' · ' + o.model.replace('-image', '') : ''),
+    o.activeCount > 0,
+    () => toggleOp(o.op, !(o.activeCount > 0))));
 }
 
-async function setActiveVersion(file) {
+async function toggleOp(op, on, skipRefresh) {
   try {
     const r = await fetch('/api/edits/active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: current.folder, face: aiFace, file }),
+      body: JSON.stringify({ folder: current.folder, op, on }),
     });
     if (!r.ok) throw 0;
-    edits[current.folder][aiFace].active = file;
-    await reloadFace(current.folder, aiFace);
-    document.getElementById('ai-face-preview').src = faceUrl(current.folder, aiFace);
-    renderAiVersions();
+    if (!skipRefresh) await refreshEditsAndFaces();
   } catch { toast('切换版本失败'); }
+}
+
+async function refreshEditsAndFaces() {
+  edits = await (await fetch('assets/edits.json?t=' + Date.now())).json();
+  for (const fd of FACE_DEFS) await reloadFace(current.folder, fd.face);
+  renderAiVersions();
+  captureView();
 }
 
 async function reloadFace(folder, face) {
@@ -878,38 +1038,64 @@ addEventListener('paste', e => {
   }
 });
 
-document.getElementById('ai-face-refresh').addEventListener('click', refreshAiPanel);
+document.getElementById('ai-cap-refresh').addEventListener('click', captureView);
+document.getElementById('ai-fov').addEventListener('input', e => {
+  document.getElementById('ai-fov-val').textContent = e.target.value;
+  captureView();
+});
 
 document.getElementById('ai-generate').addEventListener('click', async () => {
   const prompt = document.getElementById('ai-prompt').value.trim();
-  if (!prompt || aiBusy || !current) return;
+  if (!prompt || aiBusy || !current || !pendingCap) return;
   aiBusy = true;
+  const cap = pendingCap;
   const btn = document.getElementById('ai-generate');
   const status = document.getElementById('ai-status');
   btn.disabled = true;
-  status.textContent = '生成中，约需 1 分钟…';
   const t0 = Date.now();
   const timer = setInterval(() =>
     status.textContent = '生成中 ' + Math.round((Date.now() - t0) / 1000) + 's…', 1000);
   try {
-    const r = await fetch('/api/edit', {
+    const r = await fetch('/api/edit-view', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        folder: current.folder, face: aiFace, prompt,
+        folder: current.folder, prompt,
         model: document.getElementById('ai-model').value || undefined,
         ref: aiRef || undefined,
+        image: cap.image,
       }),
     });
     const res = await r.json();
     if (!r.ok || res.error) throw new Error(res.error || 'HTTP ' + r.status);
-    edits = await (await fetch('assets/edits.json?t=' + Date.now())).json();
-    await reloadFace(current.folder, aiFace);
-    document.getElementById('ai-face-preview').src = faceUrl(current.folder, aiFace);
+    clearInterval(timer);
+
+    status.textContent = '融合贴图中…';
+    await new Promise(rs => setTimeout(rs, 30));  // 让状态先渲染出来
+    const editedImg = await loadImageEl(res.image);
+    const faceCanvases = await reprojectToFaces(cap, editedImg);
+    if (!Object.keys(faceCanvases).length) throw new Error('编辑区域没有覆盖任何面');
+
+    status.textContent = '保存中…';
+    const facesData = {};
+    for (const [face, canvas] of Object.entries(faceCanvases))
+      facesData[face] = canvas.toDataURL('image/jpeg', 0.92);
+    const r2 = await fetch('/api/edit-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: current.folder, prompt,
+        model: document.getElementById('ai-model').value || '',
+        faces: facesData,
+      }),
+    });
+    const res2 = await r2.json();
+    if (!r2.ok || res2.error) throw new Error(res2.error || 'HTTP ' + r2.status);
+
+    await refreshEditsAndFaces();
     document.getElementById('ai-prompt').value = '';
-    renderAiVersions();
     status.textContent = '';
-    toast('已应用编辑结果');
+    toast('已应用编辑（覆盖 ' + res2.faces.length + ' 个面）');
   } catch (e) {
     status.textContent = '失败：' + e.message;
   } finally {
@@ -918,6 +1104,38 @@ document.getElementById('ai-generate').addEventListener('click', async () => {
     btn.disabled = false;
   }
 });
+
+/* 重投影自测（?viewtest&capyaw=45&yaw=100）：把捕捉画面染红贴回，验证几何对齐 */
+async function viewTest() {
+  const p = new URLSearchParams(location.search);
+  const oy = yaw, op = pitch;
+  yaw = (parseFloat(p.get('capyaw')) || 0) * Math.PI / 180;
+  pitch = (parseFloat(p.get('cappitch')) || 0) * Math.PI / 180;
+  updateCamera();
+  captureView();
+  yaw = oy; pitch = op;
+  updateCamera();
+
+  const img = await loadImageEl(pendingCap.image);
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  ctx.fillStyle = 'rgba(255,0,0,0.45)';
+  ctx.fillRect(0, 0, c.width, c.height);
+  const edited = await loadImageEl(c.toDataURL('image/jpeg', 0.9));
+  const faces = await reprojectToFaces(pendingCap, edited);
+  for (const [face, canvas] of Object.entries(faces)) {
+    const i = FACE_DEFS.findIndex(fd => fd.face === face);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = currentGroup.children[i].material;
+    mat.map?.dispose();
+    mat.map = tex;
+    mat.needsUpdate = true;
+  }
+  window.__viewtestDone = Object.keys(faces);
+}
 
 function closeDrawers(except) {
   ['ann-drawer', 'ai-panel'].forEach(id => {
@@ -1013,6 +1231,7 @@ async function init() {
     opts.pitch = THREE.MathUtils.degToRad(parseFloat(params.get('pitch')) || 0);
   }
   await gotoScene(startFolder, opts);
+  if (params.has('viewtest')) await viewTest();
   fadeEl.style.opacity = 0;
 }
 
