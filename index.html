@@ -198,6 +198,18 @@
       <button class="small" id="ai-face-refresh">用当前朝向</button>
     </div>
     <img id="ai-face-preview" alt="">
+    <select id="ai-model"></select>
+    <div class="face-row" style="margin-top:8px">
+      <span style="font-size:12px;color:#aaa">参考图（可选，可直接 Ctrl+V 粘贴）</span>
+      <span>
+        <button class="small" id="ai-ref-btn">选择</button>
+        <button class="small" id="ai-ref-clear" style="display:none">移除</button>
+      </span>
+    </div>
+    <input type="file" id="ai-ref-file" accept="image/*" style="display:none">
+    <img id="ai-ref-preview" style="display:none;width:100%;border-radius:10px;margin-top:6px" alt="">
+    <div id="ai-ref-tip" style="display:none;font-size:12px;color:#888;margin-top:6px;line-height:1.5">
+      提示词里用「图1」指当前画面、「图2」指参考图，例如：把图2的沙发放到图1的客厅里</div>
     <textarea id="ai-prompt" placeholder="描述修改，例如：把沙发换成米色布艺沙发；地毯改成纯色浅灰"></textarea>
     <button class="primary" id="ai-generate">生成（约 1 分钟）</button>
     <div id="ai-status"></div>
@@ -782,7 +794,8 @@ function renderAiVersions() {
     box.appendChild(el);
   };
   mk('📷 原图', null);
-  entry.versions.forEach(v => mk(null, v.file, v.prompt, v.time));
+  entry.versions.forEach(v => mk(null, v.file, v.prompt,
+    (v.time || '') + (v.model ? ' · ' + v.model.replace('-image', '') : '')));
 }
 
 async function setActiveVersion(file) {
@@ -817,6 +830,54 @@ document.getElementById('btn-ai').addEventListener('click', () => {
   if (panel.classList.contains('show')) refreshAiPanel();
 });
 
+/* 参考图：文件选择 / Ctrl+V 粘贴，统一压到 1500px 内的 jpeg data URL */
+let aiRef = null;
+
+function setRefImage(dataUrl) {
+  aiRef = dataUrl;
+  const preview = document.getElementById('ai-ref-preview');
+  const hasRef = !!dataUrl;
+  preview.src = dataUrl || '';
+  preview.style.display = hasRef ? 'block' : 'none';
+  document.getElementById('ai-ref-tip').style.display = hasRef ? 'block' : 'none';
+  document.getElementById('ai-ref-clear').style.display = hasRef ? '' : 'none';
+}
+
+function loadRefFromBlob(blob) {
+  const img = new Image();
+  img.onload = () => {
+    const MAX = 1500;
+    const k = Math.min(1, MAX / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * k);
+    canvas.height = Math.round(img.height * k);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    setRefImage(canvas.toDataURL('image/jpeg', 0.9));
+    URL.revokeObjectURL(img.src);
+    toast('参考图已添加');
+  };
+  img.src = URL.createObjectURL(blob);
+}
+
+document.getElementById('ai-ref-btn').addEventListener('click', () =>
+  document.getElementById('ai-ref-file').click());
+document.getElementById('ai-ref-file').addEventListener('change', e => {
+  if (e.target.files[0]) loadRefFromBlob(e.target.files[0]);
+  e.target.value = '';
+});
+document.getElementById('ai-ref-clear').addEventListener('click', () => setRefImage(null));
+
+addEventListener('paste', e => {
+  if (!document.getElementById('ai-panel').classList.contains('show')) return;
+  for (const item of e.clipboardData?.items || []) {
+    if (item.type.startsWith('image/')) {
+      loadRefFromBlob(item.getAsFile());
+      e.preventDefault();
+      return;
+    }
+  }
+});
+
 document.getElementById('ai-face-refresh').addEventListener('click', refreshAiPanel);
 
 document.getElementById('ai-generate').addEventListener('click', async () => {
@@ -834,7 +895,11 @@ document.getElementById('ai-generate').addEventListener('click', async () => {
     const r = await fetch('/api/edit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: current.folder, face: aiFace, prompt }),
+      body: JSON.stringify({
+        folder: current.folder, face: aiFace, prompt,
+        model: document.getElementById('ai-model').value || undefined,
+        ref: aiRef || undefined,
+      }),
     });
     const res = await r.json();
     if (!r.ok || res.error) throw new Error(res.error || 'HTTP ' + r.status);
@@ -893,6 +958,13 @@ async function init() {
     const h = await (await fetch('/api/health')).json();
     serverMode = !!h.ok;
     aiMode = !!h.ai;
+    const sel = document.getElementById('ai-model');
+    (h.models || []).forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      sel.appendChild(opt);
+    });
   } catch { /* 静态部署（GitHub Pages），只读模式 */ }
   if (serverMode) document.getElementById('btn-ann-add').style.display = 'flex';
   if (aiMode) document.getElementById('btn-ai').style.display = 'flex';

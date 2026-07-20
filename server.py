@@ -23,6 +23,12 @@ ANN_PATH = os.path.join(ROOT, "assets", "annotations.json")
 EDITS_PATH = os.path.join(ROOT, "assets", "edits.json")
 WAN_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 FACES = set("fblrud")
+MODELS = [
+    "wan2.7-image-pro",
+    "wan2.7-image",
+    "qwen-image-2.0-pro",
+    "qwen-image-2.0",
+]
 
 
 def load_api_key():
@@ -54,16 +60,20 @@ def write_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def call_wan(prompt, image_path):
-    """调用 wan2.7-image 图像编辑，返回结果图片 URL。"""
+def call_wan(prompt, image_path, model, ref_data_url=None):
+    """调用图像编辑模型，返回结果图片 URL。
+
+    有参考图时：图1 = 当前画面，图2 = 参考图，提示词可用"图1/图2"引用。
+    """
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
+    content = [{"image": "data:image/jpeg;base64," + b64}]
+    if ref_data_url:
+        content.append({"image": ref_data_url})
+    content.append({"text": prompt})
     body = json.dumps({
-        "model": "wan2.7-image-pro",
-        "input": {"messages": [{"role": "user", "content": [
-            {"text": prompt},
-            {"image": "data:image/jpeg;base64," + b64},
-        ]}]},
+        "model": model,
+        "input": {"messages": [{"role": "user", "content": content}]},
         "parameters": {"n": 1, "watermark": False},
     }).encode()
     req = urllib.request.Request(WAN_URL, data=body, headers={
@@ -112,7 +122,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split("?")[0] == "/api/health":
-            return self.send_json({"ok": True, "ai": bool(API_KEY)})
+            return self.send_json({"ok": True, "ai": bool(API_KEY), "models": MODELS})
         return super().do_GET()
 
     def do_POST(self):
@@ -150,8 +160,14 @@ class Handler(SimpleHTTPRequestHandler):
         folder = body.get("folder", "")
         face = body.get("face", "")
         prompt = (body.get("prompt") or "").strip()
+        model = body.get("model") or MODELS[0]
+        ref = body.get("ref")
         if face not in FACES or not prompt or not re.fullmatch(r"[\w\-一-鿿]+", folder):
             return self.send_json({"error": "参数不合法"}, 400)
+        if model not in MODELS:
+            return self.send_json({"error": "不支持的模型: " + str(model)}, 400)
+        if ref and not (isinstance(ref, str) and ref.startswith("data:image/")):
+            return self.send_json({"error": "参考图格式不合法"}, 400)
         src = os.path.join(ROOT, "assets", "scenes", folder, face + ".jpg")
         if not os.path.exists(src):
             return self.send_json({"error": "场景图不存在"}, 404)
@@ -162,7 +178,7 @@ class Handler(SimpleHTTPRequestHandler):
         if active and os.path.exists(os.path.join(ROOT, active)):
             src = os.path.join(ROOT, active)
 
-        url = call_wan(prompt, src)
+        url = call_wan(prompt, src, model, ref)
 
         out_dir = os.path.join(ROOT, "assets", "edits", folder)
         os.makedirs(out_dir, exist_ok=True)
@@ -172,7 +188,7 @@ class Handler(SimpleHTTPRequestHandler):
         rel = "assets/edits/%s/%s" % (folder, fname)
         entry = edits.setdefault(folder, {}).setdefault(face, {"active": None, "versions": []})
         entry["versions"].append({
-            "file": rel, "prompt": prompt,
+            "file": rel, "prompt": prompt, "model": model,
             "time": time.strftime("%Y-%m-%d %H:%M"),
         })
         entry["active"] = rel
