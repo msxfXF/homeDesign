@@ -20,29 +20,35 @@ PORT = 8931
 ANN_PATH = os.path.join(ROOT, "assets", "annotations.json")
 EDITS_PATH = os.path.join(ROOT, "assets", "edits.json")
 WAN_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
 FACES = set("fblrud")
-MODELS = [
+DASHSCOPE_MODELS = [
     "qwen-image-2.0-pro",
     "qwen-image-2.0",
     "wan2.7-image-pro",
     "wan2.7-image",
 ]
+ARK_MODELS = [
+    "doubao-seedream-5-0-pro-260628",
+]
 
 
-def load_api_key():
-    key = os.environ.get("DASHSCOPE_API_KEY")
+def load_api_key(name):
+    key = os.environ.get(name)
     if key:
         return key.strip()
     env_file = os.path.join(ROOT, ".env")
     if os.path.exists(env_file):
         for line in open(env_file, encoding="utf-8"):
             line = line.strip()
-            if line.startswith("DASHSCOPE_API_KEY="):
+            if line.startswith(name + "="):
                 return line.split("=", 1)[1].strip()
     return None
 
 
-API_KEY = load_api_key()
+API_KEY = load_api_key("DASHSCOPE_API_KEY")
+ARK_API_KEY = load_api_key("ARK_API_KEY")
+MODELS = (DASHSCOPE_MODELS if API_KEY else []) + (ARK_MODELS if ARK_API_KEY else [])
 
 
 def read_json(path, default):
@@ -93,6 +99,36 @@ def call_wan(prompt, image_path, model, ref_data_url=None, image_data_url=None):
     raise RuntimeError("响应中没有图片: " + json.dumps(res)[:300])
 
 
+def call_ark(prompt, model, image_data_url, ref_data_url=None):
+    """调用火山方舟豆包 Seedream 图像编辑，返回结果图片 URL。"""
+    images = [image_data_url] + ([ref_data_url] if ref_data_url else [])
+    body = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "image": images if len(images) > 1 else images[0],
+        "size": "2048x2048",
+        "response_format": "url",
+        "watermark": False,
+    }).encode()
+    req = urllib.request.Request(ARK_URL, data=body, headers={
+        "Authorization": "Bearer " + ARK_API_KEY,
+        "Content-Type": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            res = json.load(r)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")
+        try:
+            detail = json.loads(detail).get("error", {}).get("message", detail)
+        except Exception:
+            pass
+        raise RuntimeError(detail[:400])
+    if not res.get("data"):
+        raise RuntimeError("响应中没有图片: " + json.dumps(res)[:300])
+    return res["data"][0]["url"]
+
+
 def download_as_data_url(url):
     """下载结果图，返回 data URL（交给前端做重投影）。"""
     with urllib.request.urlopen(url, timeout=120) as r:
@@ -125,7 +161,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split("?")[0] == "/api/health":
-            return self.send_json({"ok": True, "ai": bool(API_KEY), "models": MODELS})
+            return self.send_json({"ok": True, "ai": bool(MODELS), "models": MODELS})
         return super().do_GET()
 
     def do_POST(self):
@@ -209,8 +245,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def handle_edit_view(self):
         """AI 编辑当前视野截图，返回结果图（不落盘，前端做重投影）。"""
-        if not API_KEY:
-            return self.send_json({"error": "未配置 DASHSCOPE_API_KEY"}, 400)
+        if not MODELS:
+            return self.send_json({"error": "未配置任何模型 API key"}, 400)
         body = self.read_body()
         prompt = (body.get("prompt") or "").strip()
         model = body.get("model") or MODELS[0]
@@ -224,7 +260,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"error": "参考图格式不合法"}, 400)
 
         full_prompt = prompt + "。除上述要求外，严格保持画面其他所有内容不变：构图、视角、家具、材质、光线和色调都与原图一致。"
-        url = call_wan(full_prompt, None, model, ref, image_data_url=image)
+        if model in ARK_MODELS:
+            url = call_ark(full_prompt, model, image, ref)
+        else:
+            url = call_wan(full_prompt, None, model, ref, image_data_url=image)
         return self.send_json({"ok": True, "image": download_as_data_url(url)})
 
     def handle_edit_apply(self):
@@ -269,5 +308,6 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     print("天峰903 全景服务器: http://localhost:%d" % PORT)
-    print("AI 改图: %s" % ("已启用 (wan2.7-image)" if API_KEY else "未启用 — 请设置 DASHSCOPE_API_KEY"))
+    print("AI 改图模型: %s" % (", ".join(MODELS) if MODELS
+          else "未启用 — 请设置 DASHSCOPE_API_KEY / ARK_API_KEY"))
     ThreadingHTTPServer(("", PORT), partial(Handler, directory=ROOT)).serve_forever()
