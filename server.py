@@ -22,10 +22,10 @@ EDITS_PATH = os.path.join(ROOT, "assets", "edits.json")
 WAN_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 FACES = set("fblrud")
 MODELS = [
-    "wan2.7-image-pro",
-    "wan2.7-image",
     "qwen-image-2.0-pro",
     "qwen-image-2.0",
+    "wan2.7-image-pro",
+    "wan2.7-image",
 ]
 
 
