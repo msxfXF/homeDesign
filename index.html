@@ -367,6 +367,7 @@ async function gotoScene(folder, opts = {}) {
   else { yaw = 0; pitch = 0; }
   velYaw = velPitch = 0;
 
+  localStorage.setItem('last-scene', folder);
   document.getElementById('scene-name').textContent = target.name;
   document.querySelectorAll('.thumb').forEach(el =>
     el.classList.toggle('active', el.dataset.folder === folder));
@@ -1114,6 +1115,7 @@ document.getElementById('ai-generate').addEventListener('click', async () => {
 
     await refreshEditsAndFaces();
     document.getElementById('ai-prompt').value = '';
+    setRefImage(null);
     status.textContent = '';
     toast('已应用编辑（覆盖 ' + res2.faces.length + ' 个面）');
   } catch (e) {
@@ -1204,6 +1206,9 @@ async function init() {
       opt.textContent = m;
       sel.appendChild(opt);
     });
+    const savedModel = localStorage.getItem('ai-model');
+    if (savedModel && (h.models || []).includes(savedModel)) sel.value = savedModel;
+    sel.addEventListener('change', () => localStorage.setItem('ai-model', sel.value));
   } catch { /* 静态部署（GitHub Pages），只读模式 */ }
   if (serverMode) document.getElementById('btn-ann-add').style.display = 'flex';
   if (aiMode) document.getElementById('btn-ai').style.display = 'flex';
@@ -1242,10 +1247,19 @@ async function init() {
     targetSel.appendChild(opt);
   });
 
-  // 支持 ?scene=文件夹&yaw=度&pitch=度 指定初始视角
+  // 恢复上次浏览的场景和各场景视角
+  try { viewMemory = JSON.parse(localStorage.getItem('view-memory') || '{}'); } catch {}
+  addEventListener('pagehide', () => {
+    if (current) viewMemory[current.folder] = { yaw, pitch };
+    localStorage.setItem('view-memory', JSON.stringify(viewMemory));
+  });
+
+  // 初始场景优先级：?scene= 参数 > 上次浏览的场景 > 第一个场景
   const params = new URLSearchParams(location.search);
-  const startFolder = params.get('scene') && scenes.find(s => s.folder === params.get('scene'))
-    ? params.get('scene') : scenes[0].folder;
+  const valid = f => f && scenes.find(s => s.folder === f);
+  const startFolder = valid(params.get('scene')) ? params.get('scene')
+    : valid(localStorage.getItem('last-scene')) ? localStorage.getItem('last-scene')
+    : scenes[0].folder;
   const opts = {};
   if (params.has('yaw')) {
     opts.yaw = THREE.MathUtils.degToRad(parseFloat(params.get('yaw')) || 0);

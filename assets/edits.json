@@ -1,127 +1,104 @@
 {
-  "09_主卧卫生间": {
+  "03_客餐厅C": {
     "f": {
-      "active": "assets/edits/09_主卧卫生间/f_1784518193.jpg",
+      "active": "assets/edits/03_客餐厅C/f_1784520665.jpg",
       "versions": [
         {
-          "file": "assets/edits/09_主卧卫生间/f_1784516433.jpg",
-          "prompt": "洗手池我想要这样的",
-          "model": "wan2.7-image-pro",
-          "time": "2026-07-20 11:00"
+          "file": "assets/edits/03_客餐厅C/f_1784520665.jpg",
+          "prompt": "帮我将电视画面改为首页画面",
+          "model": "doubao-seedream-5-0-pro-260628",
+          "time": "2026-07-20 12:11",
+          "op": "1784520665"
+        }
+      ]
+    }
+  },
+  "09_主卧卫生间": {
+    "f": {
+      "active": "assets/edits/09_主卧卫生间/f_1784520937.jpg",
+      "versions": [
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784520834.jpg",
+          "prompt": "帮我把洗手池风格改一下。改成参考图片。",
+          "model": "doubao-seedream-5-0-pro-260628",
+          "time": "2026-07-20 12:13",
+          "op": "1784520834"
         },
         {
-          "file": "assets/edits/09_主卧卫生间/f_1784516488.jpg",
-          "prompt": "洗手池我想要这样的，其他的不变",
-          "model": "wan2.7-image-pro",
-          "time": "2026-07-20 11:01"
-        },
-        {
-          "file": "assets/edits/09_主卧卫生间/f_1784516540.jpg",
-          "prompt": "洗手池我想要这样的，其他的保持不变",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:02"
-        },
-        {
-          "file": "assets/edits/09_主卧卫生间/f_1784516769.jpg",
-          "prompt": "洗手池我喜欢一个的，不要设计成两个分开，另外，我想要收纳空间",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:06"
-        },
-        {
-          "file": "assets/edits/09_主卧卫生间/f_1784516826.jpg",
-          "prompt": "洗手池我喜欢一个的，并且要收纳空间放洗漱用品",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:07"
-        },
-        {
-          "file": "assets/edits/09_主卧卫生间/f_1784518123.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "wan2.7-image-pro",
-          "time": "2026-07-20 11:28",
-          "op": "1784518123"
-        },
-        {
-          "file": "assets/edits/09_主卧卫生间/f_1784518193.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:29",
-          "op": "1784518193"
+          "file": "assets/edits/09_主卧卫生间/f_1784520937.jpg",
+          "prompt": "帮我把洗手池风格，改为参考图",
+          "model": "doubao-seedream-5-0-260128",
+          "time": "2026-07-20 12:15",
+          "op": "1784520937"
         }
       ]
     },
     "l": {
-      "active": "assets/edits/09_主卧卫生间/l_1784518193.jpg",
+      "active": "assets/edits/09_主卧卫生间/l_1784520937.jpg",
       "versions": [
         {
-          "file": "assets/edits/09_主卧卫生间/l_1784518123.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "wan2.7-image-pro",
-          "time": "2026-07-20 11:28",
-          "op": "1784518123"
+          "file": "assets/edits/09_主卧卫生间/l_1784520834.jpg",
+          "prompt": "帮我把洗手池风格改一下。改成参考图片。",
+          "model": "doubao-seedream-5-0-pro-260628",
+          "time": "2026-07-20 12:13",
+          "op": "1784520834"
         },
         {
-          "file": "assets/edits/09_主卧卫生间/l_1784518193.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:29",
-          "op": "1784518193"
+          "file": "assets/edits/09_主卧卫生间/l_1784520937.jpg",
+          "prompt": "帮我把洗手池风格，改为参考图",
+          "model": "doubao-seedream-5-0-260128",
+          "time": "2026-07-20 12:15",
+          "op": "1784520937"
         }
       ]
     },
     "r": {
-      "active": "assets/edits/09_主卧卫生间/r_1784518193.jpg",
+      "active": "assets/edits/09_主卧卫生间/r_1784520937.jpg",
       "versions": [
         {
-          "file": "assets/edits/09_主卧卫生间/r_1784518123.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "wan2.7-image-pro",
-          "time": "2026-07-20 11:28",
-          "op": "1784518123"
+          "file": "assets/edits/09_主卧卫生间/r_1784520834.jpg",
+          "prompt": "帮我把洗手池风格改一下。改成参考图片。",
+          "model": "doubao-seedream-5-0-pro-260628",
+          "time": "2026-07-20 12:13",
+          "op": "1784520834"
         },
         {
-          "file": "assets/edits/09_主卧卫生间/r_1784518193.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:29",
-          "op": "1784518193"
+          "file": "assets/edits/09_主卧卫生间/r_1784520937.jpg",
+          "prompt": "帮我把洗手池风格，改为参考图",
+          "model": "doubao-seedream-5-0-260128",
+          "time": "2026-07-20 12:15",
+          "op": "1784520937"
         }
       ]
     },
     "u": {
-      "active": "assets/edits/09_主卧卫生间/u_1784518193.jpg",
+      "active": "assets/edits/09_主卧卫生间/u_1784520834.jpg",
       "versions": [
         {
-          "file": "assets/edits/09_主卧卫生间/u_1784518123.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "wan2.7-image-pro",
-          "time": "2026-07-20 11:28",
-          "op": "1784518123"
-        },
-        {
-          "file": "assets/edits/09_主卧卫生间/u_1784518193.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:29",
-          "op": "1784518193"
+          "file": "assets/edits/09_主卧卫生间/u_1784520834.jpg",
+          "prompt": "帮我把洗手池风格改一下。改成参考图片。",
+          "model": "doubao-seedream-5-0-pro-260628",
+          "time": "2026-07-20 12:13",
+          "op": "1784520834"
         }
       ]
     },
     "d": {
-      "active": "assets/edits/09_主卧卫生间/d_1784518193.jpg",
+      "active": "assets/edits/09_主卧卫生间/d_1784520937.jpg",
       "versions": [
         {
-          "file": "assets/edits/09_主卧卫生间/d_1784518123.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "wan2.7-image-pro",
-          "time": "2026-07-20 11:28",
-          "op": "1784518123"
+          "file": "assets/edits/09_主卧卫生间/d_1784520834.jpg",
+          "prompt": "帮我把洗手池风格改一下。改成参考图片。",
+          "model": "doubao-seedream-5-0-pro-260628",
+          "time": "2026-07-20 12:13",
+          "op": "1784520834"
         },
         {
-          "file": "assets/edits/09_主卧卫生间/d_1784518193.jpg",
-          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
-          "model": "qwen-image-2.0-pro",
-          "time": "2026-07-20 11:29",
-          "op": "1784518193"
+          "file": "assets/edits/09_主卧卫生间/d_1784520937.jpg",
+          "prompt": "帮我把洗手池风格，改为参考图",
+          "model": "doubao-seedream-5-0-260128",
+          "time": "2026-07-20 12:15",
+          "op": "1784520937"
         }
       ]
     }
