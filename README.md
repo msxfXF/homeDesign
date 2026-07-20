@@ -32,8 +32,17 @@ https://msxfxf.github.io/homeDesign/?edit
 - `?yaw=45&pitch=10` 指定初始视角（度）
 - `?edit` 开启热点编辑模式
 
+## 批注 & AI 改图（本地模式）
+
+本地用 `python3 server.py` 启动（替代 http.server），打开 http://localhost:8931 后解锁两个功能：
+
+- **✍️ 批注**：点击画面任意位置写想法，自动保存到 `assets/annotations.json`；💬 侧边栏列出全部批注，点击跳转到对应场景和视角。推送后线上也能看（只读）。
+- **🎨 AI 改图**：对当前朝向的立方体面输入修改描述（如"把沙发换成米色布艺沙发"），调用阿里云 wan2.7-image 生成并直接替换全景贴图，支持多版本切换/恢复原图，可叠加编辑。结果存在 `assets/edits/`。
+
+AI 改图需要 API key：在项目根目录建 `.env` 文件写入 `DASHSCOPE_API_KEY=sk-xxx`（已 gitignore，不会提交），或设置同名环境变量。key 只在本地服务端使用，不会出现在前端代码里。
+
 ## 技术
 
 - Three.js（本地 vendor，无 CDN 依赖）立方体全景渲染：每个场景 6 张 1500×1500 面贴图（f/b/l/r/u/d）贴在立方体内表面，相机居中
 - 纯静态，无构建步骤；场景清单在 `assets/scenes.json`，热点在 `assets/hotspots.json`
-- 本地预览：`python3 -m http.server` 后打开 http://localhost:8000
+- 本地预览：`python3 server.py` 后打开 http://localhost:8931（纯静态浏览也可用 `python3 -m http.server`）

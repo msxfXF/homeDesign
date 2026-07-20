@@ -77,6 +77,85 @@
   #edit-panel .row { display: flex; gap: 6px; }
   #edit-panel .row button { flex: 1; }
 
+  /* 批注标记 */
+  #ann-layer { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+  .ann-marker { position: absolute; transform: translate(-50%, -50%); pointer-events: auto;
+    cursor: pointer; user-select: none; -webkit-user-select: none; }
+  .ann-marker .dot { width: 26px; height: 26px; border-radius: 50%; background: #ff8d1c;
+    color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center;
+    justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.4); }
+  .ann-marker .bubble { display: none; position: absolute; bottom: 34px; left: 50%;
+    transform: translateX(-50%); background: rgba(20,20,20,.92); color: #eee;
+    padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5;
+    width: max-content; max-width: 240px; backdrop-filter: blur(8px); }
+  .ann-marker:hover .bubble, .ann-marker.open .bubble { display: block; }
+  body.ann-adding #canvas-wrap { cursor: crosshair; }
+
+  /* 右侧抽屉（批注列表 / AI 改图） */
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 300px; max-width: 85vw;
+    background: rgba(18,18,18,.94); backdrop-filter: blur(14px); z-index: 25;
+    transform: translateX(100%); transition: transform .3s ease; color: #eee;
+    display: flex; flex-direction: column;
+    padding: max(16px, env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); }
+  .drawer.show { transform: translateX(0); }
+  .drawer header { display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px 12px; font-size: 15px; font-weight: 600;
+    border-bottom: 1px solid rgba(255,255,255,.1); }
+  .drawer header .close { background: none; border: none; color: #999; font-size: 20px;
+    cursor: pointer; padding: 4px; }
+  .drawer .body { flex: 1; overflow-y: auto; padding: 12px 16px; font-size: 13px; }
+
+  .ann-group-title { color: #888; font-size: 12px; margin: 10px 0 6px; }
+  .ann-item { background: rgba(255,255,255,.06); border-radius: 10px; padding: 10px 12px;
+    margin-bottom: 8px; cursor: pointer; display: flex; gap: 8px; align-items: flex-start;
+    transition: background .2s; }
+  .ann-item:hover { background: rgba(255,255,255,.12); }
+  .ann-item .num { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+    background: #ff8d1c; color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .ann-item .txt { flex: 1; line-height: 1.5; word-break: break-all; }
+  .ann-item .del { background: none; border: none; color: #777; cursor: pointer;
+    font-size: 14px; padding: 2px; }
+  .ann-item .del:hover { color: #f66; }
+  .ann-empty { color: #777; text-align: center; padding: 30px 0; }
+
+  /* AI 改图面板 */
+  #ai-face-preview { width: 100%; border-radius: 10px; display: block; margin: 8px 0; }
+  #ai-panel .face-row { display: flex; align-items: center; justify-content: space-between;
+    margin-top: 4px; }
+  #ai-panel .face-row b { font-size: 14px; }
+  #ai-panel button, #ai-panel textarea, #ai-panel select { width: 100%; margin-top: 8px;
+    padding: 9px; border-radius: 10px; border: 1px solid #444; background: #2a2a2a;
+    color: #eee; font-size: 13px; font-family: inherit; }
+  #ai-panel textarea { resize: vertical; min-height: 64px; }
+  #ai-panel button { cursor: pointer; }
+  #ai-panel button.primary { background: #ff8d1c; border-color: #ff8d1c; color: #fff;
+    font-weight: 600; }
+  #ai-panel button.primary:disabled { opacity: .5; cursor: default; }
+  #ai-panel button.small { width: auto; padding: 5px 10px; margin: 0; font-size: 12px; }
+  #ai-status { margin-top: 8px; font-size: 12px; color: #ff8d1c; min-height: 18px; }
+  #ai-versions .ver { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    border-radius: 8px; background: rgba(255,255,255,.06); margin-top: 6px; cursor: pointer; }
+  #ai-versions .ver.active { outline: 2px solid #ff8d1c; }
+  #ai-versions .ver .p { flex: 1; font-size: 12px; line-height: 1.4; word-break: break-all; }
+  #ai-versions .ver .t { color: #888; font-size: 11px; }
+
+  /* 批注输入弹窗 */
+  #ann-modal { position: fixed; inset: 0; z-index: 35; display: none;
+    align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
+  #ann-modal.show { display: flex; }
+  #ann-modal .card { width: 320px; max-width: 88vw; background: rgba(24,24,24,.97);
+    border-radius: 14px; padding: 18px; color: #eee; }
+  #ann-modal h4 { font-size: 15px; margin-bottom: 10px; }
+  #ann-modal textarea { width: 100%; min-height: 80px; padding: 10px; border-radius: 10px;
+    border: 1px solid #444; background: #2a2a2a; color: #eee; font-size: 14px;
+    font-family: inherit; resize: vertical; }
+  #ann-modal .row { display: flex; gap: 8px; margin-top: 12px; }
+  #ann-modal .row button { flex: 1; padding: 9px; border-radius: 10px; border: none;
+    font-size: 14px; cursor: pointer; }
+  #ann-modal .ok { background: #ff8d1c; color: #fff; font-weight: 600; }
+  #ann-modal .cancel { background: #333; color: #ccc; }
+
   #toast { position: fixed; left: 50%; top: 20%; transform: translateX(-50%);
     background: rgba(0,0,0,.8); color: #fff; padding: 10px 18px; border-radius: 20px;
     font-size: 14px; z-index: 40; opacity: 0; transition: opacity .3s; pointer-events: none; }
@@ -91,6 +170,7 @@
 <body>
 <div id="canvas-wrap"></div>
 <div id="hotspot-layer"></div>
+<div id="ann-layer"></div>
 <div id="fade"></div>
 <div id="loading">加载中…</div>
 
@@ -99,7 +179,41 @@
 <div id="toolbar">
   <button class="tool-btn" id="btn-gyro" title="陀螺仪" style="display:none">📱</button>
   <button class="tool-btn" id="btn-edit" title="编辑热点" style="display:none">✏️</button>
+  <button class="tool-btn" id="btn-ai" title="AI 改图" style="display:none">🎨</button>
+  <button class="tool-btn" id="btn-ann-add" title="添加批注" style="display:none">✍️</button>
+  <button class="tool-btn" id="btn-ann-list" title="批注列表">💬</button>
   <button class="tool-btn" id="btn-fs" title="全屏">⛶</button>
+</div>
+
+<div class="drawer" id="ann-drawer">
+  <header>批注<button class="close" data-close="ann-drawer">✕</button></header>
+  <div class="body" id="ann-list"></div>
+</div>
+
+<div class="drawer" id="ai-panel">
+  <header>AI 改图<button class="close" data-close="ai-panel">✕</button></header>
+  <div class="body">
+    <div class="face-row">
+      <span>编辑的面：<b id="ai-face-name"></b></span>
+      <button class="small" id="ai-face-refresh">用当前朝向</button>
+    </div>
+    <img id="ai-face-preview" alt="">
+    <textarea id="ai-prompt" placeholder="描述修改，例如：把沙发换成米色布艺沙发；地毯改成纯色浅灰"></textarea>
+    <button class="primary" id="ai-generate">生成（约 1 分钟）</button>
+    <div id="ai-status"></div>
+    <div id="ai-versions"></div>
+  </div>
+</div>
+
+<div id="ann-modal">
+  <div class="card">
+    <h4>添加批注</h4>
+    <textarea id="ann-text" placeholder="写下你的想法，例如：这面墙想做成岩板背景"></textarea>
+    <div class="row">
+      <button class="cancel" id="ann-cancel">取消</button>
+      <button class="ok" id="ann-save">保存</button>
+    </div>
+  </div>
 </div>
 
 <div id="edit-panel">
@@ -141,10 +255,14 @@ const PITCH_LIMIT = Math.PI / 2 - 0.05;
 
 let scenes = [];                  // scenes.json 里的场景列表
 let hotspots = {};                // folder -> [{yaw,pitch,target}]
+let annotations = {};             // folder -> [{yaw,pitch,text,time}]
+let edits = {};                   // folder -> face -> {active, versions:[{file,prompt,time}]}
 let current = null;               // 当前场景对象
 let currentGroup = null;          // 当前立方体 Group
 let viewMemory = {};              // folder -> {yaw,pitch} 记住视角
 let gyroOn = false;
+let serverMode = false;           // 本地服务器可用（批注可写）
+let aiMode = false;               // AI 改图可用
 
 const texLoader = new THREE.TextureLoader();
 const isTouch = 'ontouchstart' in window;
@@ -160,7 +278,13 @@ const FACE_DEFS = [
 ];
 const SIZE = 20; // 立方体半边长
 
+function encodePath(p) {
+  return p.split('/').map(encodeURIComponent).join('/');
+}
+
 function faceUrl(folder, face) {
+  const entry = edits[folder]?.[face];
+  if (entry?.active) return encodePath(entry.active) + '?v=' + entry.versions.length;
   return 'assets/scenes/' + encodeURIComponent(folder) + '/' + face + '.jpg';
 }
 
@@ -227,6 +351,7 @@ async function gotoScene(folder, opts = {}) {
     el.classList.toggle('active', el.dataset.folder === folder));
   document.querySelector('.thumb.active')?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   renderHotspots();
+  renderAnnMarkers();
   loadingEl.classList.remove('show');
 
   // 淡入新场景
@@ -432,17 +557,27 @@ if (editMode) {
   document.getElementById('edit-panel').classList.add('show');
 }
 
-function handleTap(x, y) {
-  if (!editMode || !document.getElementById('edit-panel').classList.contains('show')) return;
-  // 屏幕坐标 → 射线方向 → yaw/pitch
+function screenToYawPitch(x, y) {
   const ndc = new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
   const ray = new THREE.Raycaster();
   ray.setFromCamera(ndc, camera);
   const dir = ray.ray.direction;
-  pendingSpot = {
+  return {
     yaw: Math.atan2(dir.x, -dir.z),
     pitch: Math.asin(Math.max(-1, Math.min(1, dir.y))),
   };
+}
+
+function handleTap(x, y) {
+  if (annAdding) {
+    pendingAnn = screenToYawPitch(x, y);
+    document.getElementById('ann-text').value = '';
+    document.getElementById('ann-modal').classList.add('show');
+    document.getElementById('ann-text').focus();
+    return;
+  }
+  if (!editMode || !document.getElementById('edit-panel').classList.contains('show')) return;
+  pendingSpot = screenToYawPitch(x, y);
   const btn = document.getElementById('edit-add');
   btn.disabled = false;
   btn.textContent = '放置热点 → ' + document.getElementById('edit-target').selectedOptions[0].textContent;
@@ -489,6 +624,244 @@ function saveLocalHotspots() {
   localStorage.setItem('hotspots-draft', JSON.stringify(hotspots));
 }
 
+/* ---------- 批注 ---------- */
+const annLayer = document.getElementById('ann-layer');
+let annAdding = false;
+let pendingAnn = null;
+
+function annIndex(folder, a) {
+  return (annotations[folder] || []).indexOf(a) + 1;
+}
+
+function renderAnnMarkers() {
+  annLayer.innerHTML = '';
+  if (!current) return;
+  (annotations[current.folder] || []).forEach((a, i) => {
+    const el = document.createElement('div');
+    el.className = 'ann-marker';
+    el.innerHTML = '<div class="dot">' + (i + 1) + '</div><div class="bubble"></div>';
+    el.querySelector('.bubble').textContent = a.text;
+    el.addEventListener('click', () => el.classList.toggle('open'));
+    el._data = a;
+    annLayer.appendChild(el);
+  });
+}
+
+function renderAnnList() {
+  const list = document.getElementById('ann-list');
+  list.innerHTML = '';
+  let total = 0;
+  scenes.forEach(s => {
+    const items = annotations[s.folder] || [];
+    if (!items.length) return;
+    total += items.length;
+    const title = document.createElement('div');
+    title.className = 'ann-group-title';
+    title.textContent = s.name;
+    list.appendChild(title);
+    items.forEach((a, i) => {
+      const el = document.createElement('div');
+      el.className = 'ann-item';
+      el.innerHTML = '<span class="num">' + (i + 1) + '</span><span class="txt"></span>' +
+        (serverMode ? '<button class="del" title="删除">✕</button>' : '');
+      el.querySelector('.txt').textContent = a.text;
+      el.addEventListener('click', async e => {
+        if (e.target.classList.contains('del')) {
+          annotations[s.folder].splice(i, 1);
+          await saveAnnotations();
+          renderAnnList(); renderAnnMarkers();
+          return;
+        }
+        await gotoScene(s.folder, { yaw: a.yaw, pitch: a.pitch });
+        yaw = a.yaw; pitch = a.pitch; velYaw = velPitch = 0;
+      });
+      list.appendChild(el);
+    });
+  });
+  if (!total) list.innerHTML = '<div class="ann-empty">还没有批注' +
+    (serverMode ? '<br>点右上 ✍️ 开始标注' : '') + '</div>';
+}
+
+async function saveAnnotations() {
+  try {
+    const r = await fetch('/api/annotations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(annotations),
+    });
+    if (!r.ok) throw 0;
+  } catch { toast('批注保存失败'); }
+}
+
+function updateAnnPositions() {
+  for (const el of annLayer.children) {
+    const a = el._data;
+    projVec.copy(yawPitchToVec(a.yaw, a.pitch)).multiplyScalar(SIZE);
+    projVec.project(camera);
+    if (projVec.z > 1 || projVec.x < -1.1 || projVec.x > 1.1 || projVec.y < -1.1 || projVec.y > 1.1) {
+      el.style.display = 'none';
+    } else {
+      el.style.display = '';
+      el.style.left = (projVec.x * 0.5 + 0.5) * innerWidth + 'px';
+      el.style.top = (-projVec.y * 0.5 + 0.5) * innerHeight + 'px';
+    }
+  }
+}
+
+const btnAnnAdd = document.getElementById('btn-ann-add');
+btnAnnAdd.addEventListener('click', () => {
+  annAdding = !annAdding;
+  btnAnnAdd.classList.toggle('active', annAdding);
+  document.body.classList.toggle('ann-adding', annAdding);
+  if (annAdding) toast('点击画面中要批注的位置');
+});
+
+document.getElementById('btn-ann-list').addEventListener('click', () => {
+  closeDrawers('ann-drawer');
+  document.getElementById('ann-drawer').classList.toggle('show');
+  renderAnnList();
+});
+
+document.getElementById('ann-cancel').addEventListener('click', () => {
+  document.getElementById('ann-modal').classList.remove('show');
+  pendingAnn = null;
+});
+
+document.getElementById('ann-save').addEventListener('click', async () => {
+  const text = document.getElementById('ann-text').value.trim();
+  if (!text || !pendingAnn || !current) return;
+  (annotations[current.folder] = annotations[current.folder] || []).push({
+    ...pendingAnn, text,
+    time: new Date().toISOString().slice(0, 16).replace('T', ' '),
+  });
+  document.getElementById('ann-modal').classList.remove('show');
+  pendingAnn = null;
+  annAdding = false;
+  btnAnnAdd.classList.remove('active');
+  document.body.classList.remove('ann-adding');
+  await saveAnnotations();
+  renderAnnMarkers(); renderAnnList();
+  toast('批注已保存');
+});
+
+/* ---------- AI 改图 ---------- */
+const FACE_NAMES = { f: '前方', b: '后方', l: '左侧', r: '右侧', u: '天花板', d: '地面' };
+let aiFace = 'f';
+let aiBusy = false;
+
+function currentFace() {
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const ax = Math.abs(dir.x), ay = Math.abs(dir.y), az = Math.abs(dir.z);
+  if (ax >= ay && ax >= az) return dir.x > 0 ? 'r' : 'l';
+  if (ay >= ax && ay >= az) return dir.y > 0 ? 'u' : 'd';
+  return dir.z < 0 ? 'f' : 'b';
+}
+
+function refreshAiPanel() {
+  if (!current) return;
+  aiFace = currentFace();
+  document.getElementById('ai-face-name').textContent =
+    current.name + ' · ' + FACE_NAMES[aiFace];
+  document.getElementById('ai-face-preview').src = faceUrl(current.folder, aiFace);
+  renderAiVersions();
+}
+
+function renderAiVersions() {
+  const box = document.getElementById('ai-versions');
+  box.innerHTML = '';
+  const entry = edits[current.folder]?.[aiFace];
+  if (!entry?.versions?.length) return;
+
+  const mk = (label, file, promptText, timeText) => {
+    const el = document.createElement('div');
+    el.className = 'ver' + ((entry.active || null) === file ? ' active' : '');
+    el.innerHTML = '<span class="p"></span><span class="t"></span>';
+    el.querySelector('.p').textContent = label || promptText;
+    el.querySelector('.t').textContent = timeText || '';
+    el.addEventListener('click', () => setActiveVersion(file));
+    box.appendChild(el);
+  };
+  mk('📷 原图', null);
+  entry.versions.forEach(v => mk(null, v.file, v.prompt, v.time));
+}
+
+async function setActiveVersion(file) {
+  try {
+    const r = await fetch('/api/edits/active', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: current.folder, face: aiFace, file }),
+    });
+    if (!r.ok) throw 0;
+    edits[current.folder][aiFace].active = file;
+    await reloadFace(current.folder, aiFace);
+    document.getElementById('ai-face-preview').src = faceUrl(current.folder, aiFace);
+    renderAiVersions();
+  } catch { toast('切换版本失败'); }
+}
+
+async function reloadFace(folder, face) {
+  if (!current || current.folder !== folder || !currentGroup) return;
+  const i = FACE_DEFS.findIndex(fd => fd.face === face);
+  const tex = await loadTexture(faceUrl(folder, face));
+  const mat = currentGroup.children[i].material;
+  mat.map?.dispose();
+  mat.map = tex;
+  mat.needsUpdate = true;
+}
+
+document.getElementById('btn-ai').addEventListener('click', () => {
+  closeDrawers('ai-panel');
+  const panel = document.getElementById('ai-panel');
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) refreshAiPanel();
+});
+
+document.getElementById('ai-face-refresh').addEventListener('click', refreshAiPanel);
+
+document.getElementById('ai-generate').addEventListener('click', async () => {
+  const prompt = document.getElementById('ai-prompt').value.trim();
+  if (!prompt || aiBusy || !current) return;
+  aiBusy = true;
+  const btn = document.getElementById('ai-generate');
+  const status = document.getElementById('ai-status');
+  btn.disabled = true;
+  status.textContent = '生成中，约需 1 分钟…';
+  const t0 = Date.now();
+  const timer = setInterval(() =>
+    status.textContent = '生成中 ' + Math.round((Date.now() - t0) / 1000) + 's…', 1000);
+  try {
+    const r = await fetch('/api/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: current.folder, face: aiFace, prompt }),
+    });
+    const res = await r.json();
+    if (!r.ok || res.error) throw new Error(res.error || 'HTTP ' + r.status);
+    edits = await (await fetch('assets/edits.json?t=' + Date.now())).json();
+    await reloadFace(current.folder, aiFace);
+    document.getElementById('ai-face-preview').src = faceUrl(current.folder, aiFace);
+    document.getElementById('ai-prompt').value = '';
+    renderAiVersions();
+    status.textContent = '';
+    toast('已应用编辑结果');
+  } catch (e) {
+    status.textContent = '失败：' + e.message;
+  } finally {
+    clearInterval(timer);
+    aiBusy = false;
+    btn.disabled = false;
+  }
+});
+
+function closeDrawers(except) {
+  ['ann-drawer', 'ai-panel'].forEach(id => {
+    if (id !== except) document.getElementById(id).classList.remove('show');
+  });
+}
+document.querySelectorAll('.drawer .close').forEach(b =>
+  b.addEventListener('click', () => document.getElementById(b.dataset.close).classList.remove('show')));
+
 /* ---------- 其他 UI ---------- */
 document.getElementById('btn-fs').addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen();
@@ -514,6 +887,22 @@ addEventListener('resize', () => {
 async function init() {
   const data = await (await fetch('assets/scenes.json')).json();
   scenes = data.scenes;
+
+  // 探测本地服务器：可用则开启批注编辑 / AI 改图
+  try {
+    const h = await (await fetch('/api/health')).json();
+    serverMode = !!h.ok;
+    aiMode = !!h.ai;
+  } catch { /* 静态部署（GitHub Pages），只读模式 */ }
+  if (serverMode) document.getElementById('btn-ann-add').style.display = 'flex';
+  if (aiMode) document.getElementById('btn-ai').style.display = 'flex';
+
+  try {
+    annotations = await (await fetch('assets/annotations.json?t=' + Date.now())).json();
+  } catch { annotations = {}; }
+  try {
+    edits = await (await fetch('assets/edits.json?t=' + Date.now())).json();
+  } catch { edits = {}; }
 
   try {
     hotspots = await (await fetch('assets/hotspots.json')).json();
@@ -569,6 +958,7 @@ function animate() {
     updateCamera();
   }
   updateHotspotPositions();
+  updateAnnPositions();
   renderer.render(scene, camera);
 }
 
