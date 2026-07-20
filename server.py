@@ -30,6 +30,7 @@ DASHSCOPE_MODELS = [
 ]
 ARK_MODELS = [
     "doubao-seedream-5-0-pro-260628",
+    "doubao-seedream-5-0-260128",
 ]
 
 
