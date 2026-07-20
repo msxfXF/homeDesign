@@ -186,7 +186,8 @@ class Handler(SimpleHTTPRequestHandler):
         if ref and not (isinstance(ref, str) and ref.startswith("data:image/")):
             return self.send_json({"error": "参考图格式不合法"}, 400)
 
-        url = call_wan(prompt, None, model, ref, image_data_url=image)
+        full_prompt = prompt + "。除上述要求外，严格保持画面其他所有内容不变：构图、视角、家具、材质、光线和色调都与原图一致。"
+        url = call_wan(full_prompt, None, model, ref, image_data_url=image)
         return self.send_json({"ok": True, "image": download_as_data_url(url)})
 
     def handle_edit_apply(self):
