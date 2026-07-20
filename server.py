@@ -59,7 +59,7 @@ def call_wan(prompt, image_path):
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
     body = json.dumps({
-        "model": "wan2.7-image",
+        "model": "wan2.7-image-pro",
         "input": {"messages": [{"role": "user", "content": [
             {"text": prompt},
             {"image": "data:image/jpeg;base64," + b64},
