@@ -29,8 +29,8 @@ DASHSCOPE_MODELS = [
     "wan2.7-image",
 ]
 ARK_MODELS = [
-    "doubao-seedream-5-0-pro-260628",
     "doubao-seedream-5-0-260128",
+    "doubao-seedream-5-0-pro-260628",
 ]
 
 
@@ -49,7 +49,7 @@ def load_api_key(name):
 
 API_KEY = load_api_key("DASHSCOPE_API_KEY")
 ARK_API_KEY = load_api_key("ARK_API_KEY")
-MODELS = (DASHSCOPE_MODELS if API_KEY else []) + (ARK_MODELS if ARK_API_KEY else [])
+MODELS = (ARK_MODELS if ARK_API_KEY else []) + (DASHSCOPE_MODELS if API_KEY else [])
 
 
 def read_json(path, default):
