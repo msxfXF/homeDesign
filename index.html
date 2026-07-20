@@ -204,8 +204,8 @@
     <img id="ai-cap-preview" alt="">
     <div class="face-row">
       <span style="font-size:12px;color:#aaa">捕捉视野 <b id="ai-fov-val">105</b>°<br>
-        <span style="font-size:11px;color:#777">越大越模糊，建议 ≤105°</span></span>
-      <input type="range" id="ai-fov" min="90" max="120" value="105" step="5" style="width:50%">
+        <span style="font-size:11px;color:#777">调小可精准改局部细节，越大越模糊</span></span>
+      <input type="range" id="ai-fov" min="45" max="120" value="105" step="5" style="width:50%">
     </div>
     <select id="ai-model"></select>
     <div class="face-row" style="margin-top:8px">
@@ -1128,6 +1128,7 @@ document.getElementById('ai-generate').addEventListener('click', async () => {
 /* 重投影自测（?viewtest&capyaw=45&yaw=100）：把捕捉画面染红贴回，验证几何对齐 */
 async function viewTest() {
   const p = new URLSearchParams(location.search);
+  if (p.get('capfov')) document.getElementById('ai-fov').value = p.get('capfov');
   const oy = yaw, op = pitch;
   yaw = (parseFloat(p.get('capyaw')) || 0) * Math.PI / 180;
   pitch = (parseFloat(p.get('cappitch')) || 0) * Math.PI / 180;
