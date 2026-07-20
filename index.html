@@ -203,8 +203,9 @@
     </div>
     <img id="ai-cap-preview" alt="">
     <div class="face-row">
-      <span style="font-size:12px;color:#aaa">捕捉视野 <b id="ai-fov-val">105</b>°</span>
-      <input type="range" id="ai-fov" min="90" max="120" value="105" step="5" style="width:55%">
+      <span style="font-size:12px;color:#aaa">捕捉视野 <b id="ai-fov-val">105</b>°<br>
+        <span style="font-size:11px;color:#777">越大越模糊，建议 ≤105°</span></span>
+      <input type="range" id="ai-fov" min="90" max="120" value="105" step="5" style="width:50%">
     </div>
     <select id="ai-model"></select>
     <div class="face-row" style="margin-top:8px">
@@ -770,7 +771,7 @@ let pendingCap = null;   // {image, basis:{x,y,f}, tanHalf}
 
 // 捕捉比当前视野更大一圈的画面送给 AI。
 // 用 WebGLRenderTarget 离屏渲染（同一 GL 上下文，不动主 canvas），读回像素拼成图片。
-const CAP_SIZE = 1536;
+const CAP_SIZE = 2048;
 const capCam = new THREE.PerspectiveCamera(105, 1, 0.1, 100);
 const capTarget = new THREE.WebGLRenderTarget(CAP_SIZE, CAP_SIZE, {
   colorSpace: THREE.SRGBColorSpace,

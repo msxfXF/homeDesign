@@ -70,10 +70,14 @@ def call_wan(prompt, image_path, model, ref_data_url=None, image_data_url=None):
     if ref_data_url:
         content.append({"image": ref_data_url})
     content.append({"text": prompt})
+    parameters = {"n": 1, "watermark": False}
+    if model.startswith("qwen"):
+        # qwen 系列默认输出与输入同分辨率，显式拉满到上限保证清晰度
+        parameters["size"] = "2048*2048"
     body = json.dumps({
         "model": model,
         "input": {"messages": [{"role": "user", "content": content}]},
-        "parameters": {"n": 1, "watermark": False},
+        "parameters": parameters,
     }).encode()
     req = urllib.request.Request(WAN_URL, data=body, headers={
         "Authorization": "Bearer " + API_KEY,
