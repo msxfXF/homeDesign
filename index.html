@@ -140,6 +140,9 @@
   #ai-versions .ver.active { outline: 2px solid #ff8d1c; }
   #ai-versions .ver .p { flex: 1; font-size: 12px; line-height: 1.4; word-break: break-all; }
   #ai-versions .ver .t { color: #888; font-size: 11px; }
+  #ai-versions .ver .del { background: none; border: none; color: #777; cursor: pointer;
+    font-size: 13px; padding: 2px 4px; flex: 0 0 auto; width: auto; margin: 0; }
+  #ai-versions .ver .del:hover { color: #f66; }
 
   /* 批注输入弹窗 */
   #ann-modal { position: fixed; inset: 0; z-index: 35; display: none;
@@ -935,13 +938,28 @@ function renderAiVersions() {
   if (!ops.length) return;
   const anyActive = ops.some(o => o.activeCount > 0);
 
-  const mk = (label, timeText, isActive, onClick) => {
+  const mk = (label, timeText, isActive, onClick, delOp) => {
     const el = document.createElement('div');
     el.className = 'ver' + (isActive ? ' active' : '');
-    el.innerHTML = '<span class="p"></span><span class="t"></span>';
+    el.innerHTML = '<span class="p"></span><span class="t"></span>' +
+      (delOp ? '<button class="del" title="删除此版本">✕</button>' : '');
     el.querySelector('.p').textContent = label;
     el.querySelector('.t').textContent = timeText || '';
     el.addEventListener('click', onClick);
+    if (delOp) el.querySelector('.del').addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('删除该版本？图片文件会一并删除，不可恢复。')) return;
+      try {
+        const r = await fetch('/api/edits/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder: current.folder, op: delOp }),
+        });
+        if (!r.ok) throw 0;
+        await refreshEditsAndFaces();
+        toast('已删除');
+      } catch { toast('删除失败'); }
+    });
     box.appendChild(el);
   };
   mk('📷 全部恢复原图', '', !anyActive, async () => {
@@ -951,7 +969,8 @@ function renderAiVersions() {
   ops.forEach(o => mk(o.prompt,
     (o.time || '') + (o.model ? ' · ' + o.model.replace('-image', '') : ''),
     o.activeCount > 0,
-    () => toggleOp(o.op, !(o.activeCount > 0))));
+    () => toggleOp(o.op, !(o.activeCount > 0)),
+    o.op));
 }
 
 async function toggleOp(op, on, skipRefresh) {

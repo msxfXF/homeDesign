@@ -1,7 +1,7 @@
 {
   "09_主卧卫生间": {
     "f": {
-      "active": "assets/edits/09_主卧卫生间/f_1784516826.jpg",
+      "active": "assets/edits/09_主卧卫生间/f_1784518193.jpg",
       "versions": [
         {
           "file": "assets/edits/09_主卧卫生间/f_1784516433.jpg",
@@ -32,6 +32,96 @@
           "prompt": "洗手池我喜欢一个的，并且要收纳空间放洗漱用品",
           "model": "qwen-image-2.0-pro",
           "time": "2026-07-20 11:07"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784518123.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "wan2.7-image-pro",
+          "time": "2026-07-20 11:28",
+          "op": "1784518123"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/f_1784518193.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:29",
+          "op": "1784518193"
+        }
+      ]
+    },
+    "l": {
+      "active": "assets/edits/09_主卧卫生间/l_1784518193.jpg",
+      "versions": [
+        {
+          "file": "assets/edits/09_主卧卫生间/l_1784518123.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "wan2.7-image-pro",
+          "time": "2026-07-20 11:28",
+          "op": "1784518123"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/l_1784518193.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:29",
+          "op": "1784518193"
+        }
+      ]
+    },
+    "r": {
+      "active": "assets/edits/09_主卧卫生间/r_1784518193.jpg",
+      "versions": [
+        {
+          "file": "assets/edits/09_主卧卫生间/r_1784518123.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "wan2.7-image-pro",
+          "time": "2026-07-20 11:28",
+          "op": "1784518123"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/r_1784518193.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:29",
+          "op": "1784518193"
+        }
+      ]
+    },
+    "u": {
+      "active": "assets/edits/09_主卧卫生间/u_1784518193.jpg",
+      "versions": [
+        {
+          "file": "assets/edits/09_主卧卫生间/u_1784518123.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "wan2.7-image-pro",
+          "time": "2026-07-20 11:28",
+          "op": "1784518123"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/u_1784518193.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:29",
+          "op": "1784518193"
+        }
+      ]
+    },
+    "d": {
+      "active": "assets/edits/09_主卧卫生间/d_1784518193.jpg",
+      "versions": [
+        {
+          "file": "assets/edits/09_主卧卫生间/d_1784518123.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "wan2.7-image-pro",
+          "time": "2026-07-20 11:28",
+          "op": "1784518123"
+        },
+        {
+          "file": "assets/edits/09_主卧卫生间/d_1784518193.jpg",
+          "prompt": "把洗手池改为一个，并且有收纳空间，其余保持不变",
+          "model": "qwen-image-2.0-pro",
+          "time": "2026-07-20 11:29",
+          "op": "1784518193"
         }
       ]
     }

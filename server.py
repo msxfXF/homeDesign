@@ -137,6 +137,9 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/edits/active":
                 return self.handle_active()
 
+            if path == "/api/edits/delete":
+                return self.handle_delete()
+
             if path == "/api/edit-view":
                 return self.handle_edit_view()
 
@@ -169,6 +172,36 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"error": "没有该编辑记录"}, 404)
         write_json(EDITS_PATH, edits)
         return self.send_json({"ok": True, "faces": affected})
+
+    def handle_delete(self):
+        """删除一组编辑版本（含图片文件）。body: {folder, op}"""
+        body = self.read_body()
+        folder, op = body.get("folder", ""), body.get("op", "")
+        edits = read_json(EDITS_PATH, {})
+        removed = []
+        for face in list(edits.get(folder, {})):
+            entry = edits[folder][face]
+            keep = []
+            for v in entry["versions"]:
+                if (v.get("op") or v["file"]) == op:
+                    removed.append(v["file"])
+                    if entry.get("active") == v["file"]:
+                        entry["active"] = None
+                else:
+                    keep.append(v)
+            entry["versions"] = keep
+            if not keep:
+                del edits[folder][face]
+        if folder in edits and not edits[folder]:
+            del edits[folder]
+        if not removed:
+            return self.send_json({"error": "没有该编辑记录"}, 404)
+        write_json(EDITS_PATH, edits)
+        for rel in removed:
+            p = os.path.normpath(os.path.join(ROOT, rel))
+            if p.startswith(os.path.join(ROOT, "assets", "edits")) and os.path.exists(p):
+                os.remove(p)
+        return self.send_json({"ok": True, "removed": len(removed)})
 
     def handle_edit_view(self):
         """AI 编辑当前视野截图，返回结果图（不落盘，前端做重投影）。"""
