@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>天峰903 · 全景漫游</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-tap-highlight-color: transparent; }
+  #canvas-wrap { position: fixed; inset: 0; cursor: grab; }
+  #canvas-wrap.dragging { cursor: grabbing; }
+
+  #fade { position: fixed; inset: 0; background: #000; pointer-events: none;
+    opacity: 1; transition: opacity .5s ease; z-index: 30; }
+
+  #scene-title { position: fixed; top: max(16px, env(safe-area-inset-top)); left: 16px;
+    color: #fff; font-size: 18px; font-weight: 600; z-index: 10;
+    text-shadow: 0 1px 6px rgba(0,0,0,.6); letter-spacing: 1px; }
+  #scene-title small { display: block; font-size: 11px; font-weight: 400; opacity: .75; margin-top: 2px; }
+
+  #toolbar { position: fixed; top: max(16px, env(safe-area-inset-top)); right: 16px;
+    display: flex; gap: 8px; z-index: 10; }
+  .tool-btn { width: 40px; height: 40px; border: none; border-radius: 50%;
+    background: rgba(0,0,0,.45); color: #fff; font-size: 18px; cursor: pointer;
+    backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center;
+    transition: background .2s; }
+  .tool-btn:hover { background: rgba(0,0,0,.7); }
+  .tool-btn.active { background: rgba(255,255,255,.9); color: #000; }
+
+  /* 缩略图栏 */
+  #thumb-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    background: linear-gradient(transparent, rgba(0,0,0,.65));
+    scrollbar-width: none; }
+  #thumb-bar::-webkit-scrollbar { display: none; }
+  .thumb { flex: 0 0 auto; width: 88px; cursor: pointer; text-align: center;
+    opacity: .8; transition: opacity .2s, transform .2s; }
+  .thumb:hover { opacity: 1; }
+  .thumb img { width: 88px; height: 56px; object-fit: cover; border-radius: 8px;
+    border: 2px solid transparent; display: block; }
+  .thumb.active { opacity: 1; transform: translateY(-3px); }
+  .thumb.active img { border-color: #fff; }
+  .thumb span { color: #fff; font-size: 11px; line-height: 1.8; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+    white-space: nowrap; display: block; }
+
+  /* 热点 */
+  #hotspot-layer { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+  .hotspot { position: absolute; transform: translate(-50%, -50%); pointer-events: auto;
+    cursor: pointer; text-align: center; user-select: none; -webkit-user-select: none; }
+  .hotspot .ring { width: 44px; height: 44px; margin: 0 auto; border-radius: 50%;
+    background: rgba(255,255,255,.25); border: 2px solid rgba(255,255,255,.9);
+    backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: #fff; animation: pulse 2.2s ease-out infinite;
+    transition: background .2s; }
+  .hotspot:hover .ring { background: rgba(255,255,255,.5); }
+  .hotspot .label { margin-top: 4px; color: #fff; font-size: 12px;
+    text-shadow: 0 1px 4px rgba(0,0,0,.9); white-space: nowrap; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,255,255,.5); }
+    70% { box-shadow: 0 0 0 14px rgba(255,255,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+
+  /* 编辑面板 */
+  #edit-panel { position: fixed; top: 70px; right: 16px; z-index: 20; width: 220px;
+    background: rgba(20,20,20,.92); border-radius: 12px; padding: 14px; color: #eee;
+    font-size: 13px; display: none; backdrop-filter: blur(10px); }
+  #edit-panel.show { display: block; }
+  #edit-panel h4 { font-size: 13px; margin-bottom: 8px; }
+  #edit-panel p.tip { opacity: .65; font-size: 12px; line-height: 1.5; margin-bottom: 8px; }
+  #edit-panel select, #edit-panel button { width: 100%; margin-top: 6px; padding: 7px;
+    border-radius: 8px; border: 1px solid #444; background: #2a2a2a; color: #eee;
+    font-size: 13px; cursor: pointer; }
+  #edit-panel button.primary { background: #fff; color: #000; border-color: #fff; font-weight: 600; }
+  #edit-panel .row { display: flex; gap: 6px; }
+  #edit-panel .row button { flex: 1; }
+
+  #toast { position: fixed; left: 50%; top: 20%; transform: translateX(-50%);
+    background: rgba(0,0,0,.8); color: #fff; padding: 10px 18px; border-radius: 20px;
+    font-size: 14px; z-index: 40; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+
+  #loading { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    color: rgba(255,255,255,.85); font-size: 14px; z-index: 31; letter-spacing: 2px;
+    display: none; }
+  #loading.show { display: block; }
+</style>
+</head>
+<body>
+<div id="canvas-wrap"></div>
+<div id="hotspot-layer"></div>
+<div id="fade"></div>
+<div id="loading">加载中…</div>
+
+<div id="scene-title"><span id="scene-name"></span><small>天峰903 · 全景漫游</small></div>
+
+<div id="toolbar">
+  <button class="tool-btn" id="btn-gyro" title="陀螺仪" style="display:none">📱</button>
+  <button class="tool-btn" id="btn-edit" title="编辑热点" style="display:none">✏️</button>
+  <button class="tool-btn" id="btn-fs" title="全屏">⛶</button>
+</div>
+
+<div id="edit-panel">
+  <h4>热点编辑模式</h4>
+  <p class="tip">点击画面中的地面位置放置热点，然后选择要跳转的目标场景。</p>
+  <select id="edit-target"></select>
+  <button class="primary" id="edit-add" disabled>放置热点（先点击画面）</button>
+  <div class="row">
+    <button id="edit-undo">撤销</button>
+    <button id="edit-clear">清空本场景</button>
+  </div>
+  <button id="edit-export">导出 hotspots.json</button>
+</div>
+
+<div id="thumb-bar"></div>
+<div id="toast"></div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.min.js';
+
+/* ---------- 基础状态 ---------- */
+const wrap = document.getElementById('canvas-wrap');
+const fadeEl = document.getElementById('fade');
+const loadingEl = document.getElementById('loading');
+const hotspotLayer = document.getElementById('hotspot-layer');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+wrap.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 100);
+
+let yaw = 0, pitch = 0;           // 弧度；yaw=0 朝向 f 面(-z)
+let velYaw = 0, velPitch = 0;     // 惯性
+let fov = 75;
+const PITCH_LIMIT = Math.PI / 2 - 0.05;
+
+let scenes = [];                  // scenes.json 里的场景列表
+let hotspots = {};                // folder -> [{yaw,pitch,target}]
+let current = null;               // 当前场景对象
+let currentGroup = null;          // 当前立方体 Group
+let viewMemory = {};              // folder -> {yaw,pitch} 记住视角
+let gyroOn = false;
+
+const texLoader = new THREE.TextureLoader();
+const isTouch = 'ontouchstart' in window;
+
+/* ---------- 立方体构建（krpano 六面 → 内表面平面） ---------- */
+const FACE_DEFS = [
+  { face: 'f', pos: [0, 0, -1], rot: [0, 0, 0] },
+  { face: 'b', pos: [0, 0, 1],  rot: [0, Math.PI, 0] },
+  { face: 'l', pos: [-1, 0, 0], rot: [0, Math.PI / 2, 0] },
+  { face: 'r', pos: [1, 0, 0],  rot: [0, -Math.PI / 2, 0] },
+  { face: 'u', pos: [0, 1, 0],  rot: [Math.PI / 2, 0, 0] },
+  { face: 'd', pos: [0, -1, 0], rot: [-Math.PI / 2, 0, 0] },
+];
+const SIZE = 20; // 立方体半边长
+
+function faceUrl(folder, face) {
+  return 'assets/scenes/' + encodeURIComponent(folder) + '/' + face + '.jpg';
+}
+
+function loadTexture(url) {
+  return new Promise((resolve, reject) => {
+    texLoader.load(url, t => { t.colorSpace = THREE.SRGBColorSpace; resolve(t); }, undefined, reject);
+  });
+}
+
+async function buildCube(folder) {
+  const textures = await Promise.all(FACE_DEFS.map(fd => loadTexture(faceUrl(folder, fd.face))));
+  const group = new THREE.Group();
+  FACE_DEFS.forEach((fd, i) => {
+    const geo = new THREE.PlaneGeometry(SIZE * 2, SIZE * 2);
+    const mat = new THREE.MeshBasicMaterial({ map: textures[i], transparent: true, opacity: 0, depthWrite: false });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(fd.pos[0] * SIZE, fd.pos[1] * SIZE, fd.pos[2] * SIZE);
+    mesh.rotation.set(fd.rot[0], fd.rot[1], fd.rot[2]);
+    group.add(mesh);
+  });
+  return group;
+}
+
+function disposeGroup(g) {
+  g.children.forEach(m => { m.material.map?.dispose(); m.material.dispose(); m.geometry.dispose(); });
+  scene.remove(g);
+}
+
+/* ---------- 场景切换 ---------- */
+let switching = false;
+async function gotoScene(folder, opts = {}) {
+  if (switching || (current && current.folder === folder)) return;
+  const target = scenes.find(s => s.folder === folder);
+  if (!target) return;
+  switching = true;
+  loadingEl.classList.add('show');
+
+  // 记住旧场景视角
+  if (current) viewMemory[current.folder] = { yaw, pitch };
+
+  let newGroup;
+  try {
+    newGroup = await buildCube(folder);
+  } catch (e) {
+    loadingEl.classList.remove('show');
+    switching = false;
+    toast('场景加载失败');
+    return;
+  }
+
+  const old = currentGroup;
+  current = target;
+  currentGroup = newGroup;
+  scene.add(newGroup);
+
+  // 恢复视角
+  if (opts.yaw !== undefined) { yaw = opts.yaw; pitch = opts.pitch ?? 0; }
+  else if (viewMemory[folder]) { yaw = viewMemory[folder].yaw; pitch = viewMemory[folder].pitch; }
+  else { yaw = 0; pitch = 0; }
+  velYaw = velPitch = 0;
+
+  document.getElementById('scene-name').textContent = target.name;
+  document.querySelectorAll('.thumb').forEach(el =>
+    el.classList.toggle('active', el.dataset.folder === folder));
+  document.querySelector('.thumb.active')?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  renderHotspots();
+  loadingEl.classList.remove('show');
+
+  // 淡入新场景
+  await crossFade(newGroup, old);
+  switching = false;
+  preloadNeighbors();
+}
+
+function crossFade(newGroup, oldGroup) {
+  return new Promise(resolve => {
+    const t0 = performance.now(), D = 500;
+    function step(t) {
+      const k = Math.min((t - t0) / D, 1);
+      newGroup.children.forEach(m => m.material.opacity = k);
+      if (oldGroup) oldGroup.children.forEach(m => m.material.opacity = 1 - k);
+      if (k < 1) requestAnimationFrame(step);
+      else {
+        newGroup.children.forEach(m => { m.material.transparent = false; m.material.depthWrite = true; });
+        if (oldGroup) disposeGroup(oldGroup);
+        resolve();
+      }
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function preloadNeighbors() {
+  const idx = scenes.indexOf(current);
+  [idx - 1, idx + 1].forEach(i => {
+    if (i < 0 || i >= scenes.length) return;
+    FACE_DEFS.forEach(fd => { const img = new Image(); img.src = faceUrl(scenes[i].folder, fd.face); });
+  });
+}
+
+/* ---------- 视角控制 ---------- */
+function updateCamera() {
+  const cp = Math.cos(pitch);
+  camera.lookAt(Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+}
+
+// 拖拽（鼠标 + 单指）
+let dragging = false, lastX = 0, lastY = 0, moved = 0;
+let pinchDist = 0;
+
+wrap.addEventListener('pointerdown', e => {
+  if (e.isPrimary === false) return;
+  dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+  velYaw = velPitch = 0;
+  wrap.classList.add('dragging');
+});
+addEventListener('pointermove', e => {
+  if (!dragging || e.isPrimary === false) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  moved += Math.abs(dx) + Math.abs(dy);
+  const speed = (fov / 75) * 0.0032;
+  yaw -= dx * speed;
+  pitch += dy * speed;
+  pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+  velYaw = -dx * speed; velPitch = dy * speed;
+});
+addEventListener('pointerup', e => {
+  if (dragging && moved < 6) handleTap(e.clientX, e.clientY);
+  dragging = false;
+  wrap.classList.remove('dragging');
+});
+
+// 滚轮 / 双指缩放
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  fov = Math.max(35, Math.min(100, fov + e.deltaY * 0.05));
+}, { passive: false });
+
+wrap.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                           e.touches[0].clientY - e.touches[1].clientY);
+  }
+}, { passive: true });
+wrap.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                         e.touches[0].clientY - e.touches[1].clientY);
+    fov = Math.max(35, Math.min(100, fov * (pinchDist / d)));
+    pinchDist = d;
+  }
+}, { passive: true });
+
+// 键盘切换场景
+addEventListener('keydown', e => {
+  const idx = scenes.indexOf(current);
+  if (e.key === 'ArrowRight' && idx < scenes.length - 1) gotoScene(scenes[idx + 1].folder);
+  if (e.key === 'ArrowLeft' && idx > 0) gotoScene(scenes[idx - 1].folder);
+});
+
+/* ---------- 陀螺仪 ---------- */
+const gyroQuat = new THREE.Quaternion();
+const screenTransform = new THREE.Quaternion();
+const worldTransform = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // 相机看向 -z
+const euler = new THREE.Euler();
+let gyroData = null;
+let gyroYawOffset = 0;
+
+function onGyro(e) {
+  if (e.alpha == null) return;
+  gyroData = e;
+}
+
+function applyGyro() {
+  if (!gyroData) return;
+  const alpha = THREE.MathUtils.degToRad(gyroData.alpha);
+  const beta = THREE.MathUtils.degToRad(gyroData.beta);
+  const gamma = THREE.MathUtils.degToRad(gyroData.gamma);
+  const orient = THREE.MathUtils.degToRad((screen.orientation?.angle) || 0);
+
+  euler.set(beta, alpha, -gamma, 'YXZ');
+  gyroQuat.setFromEuler(euler);
+  gyroQuat.multiply(worldTransform);
+  screenTransform.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -orient);
+  gyroQuat.multiply(screenTransform);
+
+  // 加上手动 yaw 偏移，允许拖拽修正朝向
+  const offsetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), gyroYawOffset);
+  camera.quaternion.copy(offsetQ.multiply(gyroQuat));
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+}
+
+const btnGyro = document.getElementById('btn-gyro');
+if (isTouch && 'DeviceOrientationEvent' in window) btnGyro.style.display = 'flex';
+btnGyro.addEventListener('click', async () => {
+  if (!gyroOn) {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p !== 'granted') { toast('未授权陀螺仪'); return; }
+      } catch { toast('陀螺仪授权失败'); return; }
+    }
+    addEventListener('deviceorientation', onGyro);
+    // 以当前视角为基准
+    gyroYawOffset = yaw;
+    gyroOn = true;
+    btnGyro.classList.add('active');
+    toast('陀螺仪已开启');
+  } else {
+    removeEventListener('deviceorientation', onGyro);
+    gyroOn = false; gyroData = null;
+    btnGyro.classList.remove('active');
+    // 把当前朝向同步回 yaw/pitch
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    yaw = Math.atan2(dir.x, -dir.z);
+    pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)));
+    toast('陀螺仪已关闭');
+  }
+});
+
+/* ---------- 热点 ---------- */
+function yawPitchToVec(y, p) {
+  const cp = Math.cos(p);
+  return new THREE.Vector3(Math.sin(y) * cp, Math.sin(p), -Math.cos(y) * cp);
+}
+
+function renderHotspots() {
+  hotspotLayer.innerHTML = '';
+  if (!current) return;
+  (hotspots[current.folder] || []).forEach(h => {
+    const targetScene = scenes.find(s => s.folder === h.target);
+    const el = document.createElement('div');
+    el.className = 'hotspot';
+    el.innerHTML = '<div class="ring">➜</div><div class="label">' + (targetScene ? targetScene.name : h.target) + '</div>';
+    el.addEventListener('click', () => gotoScene(h.target));
+    el._data = h;
+    hotspotLayer.appendChild(el);
+  });
+}
+
+const projVec = new THREE.Vector3();
+function updateHotspotPositions() {
+  for (const el of hotspotLayer.children) {
+    const h = el._data;
+    projVec.copy(yawPitchToVec(h.yaw, h.pitch)).multiplyScalar(SIZE);
+    projVec.project(camera);
+    const behind = projVec.z > 1;
+    if (behind || projVec.x < -1.15 || projVec.x > 1.15 || projVec.y < -1.15 || projVec.y > 1.15) {
+      el.style.display = 'none';
+    } else {
+      el.style.display = '';
+      el.style.left = (projVec.x * 0.5 + 0.5) * innerWidth + 'px';
+      el.style.top = (-projVec.y * 0.5 + 0.5) * innerHeight + 'px';
+    }
+  }
+}
+
+/* ---------- 热点编辑模式（?edit 开启） ---------- */
+const editMode = new URLSearchParams(location.search).has('edit');
+let pendingSpot = null;
+
+if (editMode) {
+  document.getElementById('btn-edit').style.display = 'flex';
+  document.getElementById('btn-edit').classList.add('active');
+  document.getElementById('edit-panel').classList.add('show');
+}
+
+function handleTap(x, y) {
+  if (!editMode || !document.getElementById('edit-panel').classList.contains('show')) return;
+  // 屏幕坐标 → 射线方向 → yaw/pitch
+  const ndc = new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(ndc, camera);
+  const dir = ray.ray.direction;
+  pendingSpot = {
+    yaw: Math.atan2(dir.x, -dir.z),
+    pitch: Math.asin(Math.max(-1, Math.min(1, dir.y))),
+  };
+  const btn = document.getElementById('edit-add');
+  btn.disabled = false;
+  btn.textContent = '放置热点 → ' + document.getElementById('edit-target').selectedOptions[0].textContent;
+}
+
+document.getElementById('btn-edit').addEventListener('click', () =>
+  document.getElementById('edit-panel').classList.toggle('show'));
+
+document.getElementById('edit-add').addEventListener('click', () => {
+  if (!pendingSpot || !current) return;
+  const target = document.getElementById('edit-target').value;
+  (hotspots[current.folder] = hotspots[current.folder] || []).push({ ...pendingSpot, target });
+  saveLocalHotspots();
+  renderHotspots();
+  pendingSpot = null;
+  const btn = document.getElementById('edit-add');
+  btn.disabled = true;
+  btn.textContent = '放置热点（先点击画面）';
+  toast('热点已添加');
+});
+
+document.getElementById('edit-undo').addEventListener('click', () => {
+  if (!current || !(hotspots[current.folder] || []).length) return;
+  hotspots[current.folder].pop();
+  saveLocalHotspots(); renderHotspots();
+});
+
+document.getElementById('edit-clear').addEventListener('click', () => {
+  if (!current) return;
+  hotspots[current.folder] = [];
+  saveLocalHotspots(); renderHotspots();
+});
+
+document.getElementById('edit-export').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(hotspots, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hotspots.json';
+  a.click();
+  toast('已导出，替换 assets/hotspots.json 后提交即可');
+});
+
+function saveLocalHotspots() {
+  localStorage.setItem('hotspots-draft', JSON.stringify(hotspots));
+}
+
+/* ---------- 其他 UI ---------- */
+document.getElementById('btn-fs').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+});
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ---------- 初始化 ---------- */
+async function init() {
+  const data = await (await fetch('assets/scenes.json')).json();
+  scenes = data.scenes;
+
+  try {
+    hotspots = await (await fetch('assets/hotspots.json')).json();
+  } catch { hotspots = {}; }
+  // 编辑模式下优先使用本地草稿
+  if (editMode) {
+    const draft = localStorage.getItem('hotspots-draft');
+    if (draft) { try { hotspots = JSON.parse(draft); } catch {} }
+  }
+
+  // 缩略图栏
+  const bar = document.getElementById('thumb-bar');
+  const targetSel = document.getElementById('edit-target');
+  scenes.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'thumb';
+    el.dataset.folder = s.folder;
+    el.innerHTML = '<img loading="lazy" src="assets/scenes/' + encodeURIComponent(s.folder) +
+      '/thumb.jpg" alt=""><span>' + s.name + '</span>';
+    el.addEventListener('click', () => gotoScene(s.folder));
+    bar.appendChild(el);
+
+    const opt = document.createElement('option');
+    opt.value = s.folder;
+    opt.textContent = s.name;
+    targetSel.appendChild(opt);
+  });
+
+  // 支持 ?scene=文件夹&yaw=度&pitch=度 指定初始视角
+  const params = new URLSearchParams(location.search);
+  const startFolder = params.get('scene') && scenes.find(s => s.folder === params.get('scene'))
+    ? params.get('scene') : scenes[0].folder;
+  const opts = {};
+  if (params.has('yaw')) {
+    opts.yaw = THREE.MathUtils.degToRad(parseFloat(params.get('yaw')) || 0);
+    opts.pitch = THREE.MathUtils.degToRad(parseFloat(params.get('pitch')) || 0);
+  }
+  await gotoScene(startFolder, opts);
+  fadeEl.style.opacity = 0;
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (gyroOn && gyroData) {
+    applyGyro();
+  } else {
+    // 惯性
+    if (!dragging && (Math.abs(velYaw) > 0.00005 || Math.abs(velPitch) > 0.00005)) {
+      yaw += velYaw; pitch += velPitch;
+      pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+      velYaw *= 0.94; velPitch *= 0.94;
+    }
+    updateCamera();
+  }
+  updateHotspotPositions();
+  renderer.render(scene, camera);
+}
+
+init();
+animate();
+</script>
+</body>
+</html>
